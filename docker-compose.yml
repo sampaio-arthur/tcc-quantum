@@ -1,11 +1,13 @@
-services:
+﻿services:
   quantum-app:
     build: .
     container_name: quantum_search_tcc
+    env_file:
+      - .env
     volumes:
       - .:/app
     environment:
       - PYTHONUNBUFFERED=1
-    # Mantém o container vivo para você poder rodar comandos dentro dele
+    # MantÃ©m o container vivo para vocÃª poder rodar comandos dentro dele
     tty: true 
     stdin_open: true
