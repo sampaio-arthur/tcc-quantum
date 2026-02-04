@@ -1,4 +1,5 @@
-﻿from application.use_cases import RealizarBuscaUseCase
+﻿from application.services import SearchService
+from application.use_cases import RealizarBuscaUseCase
 from domain.entities import Document
 from infrastructure.embeddings import LocalEmbedder
 from infrastructure.quantum import SwapTestQuantumComparator
@@ -15,8 +16,9 @@ def main() -> None:
     embedder = LocalEmbedder()
     comparator = SwapTestQuantumComparator()
     use_case = RealizarBuscaUseCase(embedder, comparator)
+    service = SearchService(use_case)
 
-    results = use_case.execute(query, documents)
+    results = service.buscar(query, documents)
 
     print(f"Consulta: {query}")
     for item in results:

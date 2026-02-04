@@ -1,26 +1,31 @@
-# --- Core Quantum SDK (IBM) ---
+﻿# --- Core Quantum SDK (IBM) ---
 qiskit>=1.0.0
 qiskit-aer>=0.14.0
 
-# --- Quantum Machine Learning (Framework de Alto Nível) ---
+# --- Quantum Machine Learning (Framework de Alto NÃ­vel) ---
 pennylane>=0.35.0
 pennylane-qiskit>=0.35.0
 
-# --- Inteligência Artificial & Embeddings ---
-# Necessário para transformar texto em vetores para busca semântica
+# --- InteligÃªncia Artificial & Embeddings ---
+# NecessÃ¡rio para transformar texto em vetores para busca semÃ¢ntica
 sentence-transformers>=2.5.0
 scikit-learn>=1.4.0
 
-# --- Matemática e Ciência de Dados ---
+# --- MatemÃ¡tica e CiÃªncia de Dados ---
 numpy>=1.26.0
 scipy>=1.12.0
 pandas>=2.2.0
 
-# --- Visualização e Gráficos ---
+# --- VisualizaÃ§Ã£o e GrÃ¡ficos ---
 matplotlib>=3.8.0
 pylatexenc>=2.10
 seaborn>=0.13.0
 
-# --- Utilitários ---
-# Para Clean Architecture e Injeção de Dependência (opcional, mas recomendado para Java Devs)
+# --- UtilitÃ¡rios ---
+# Para Clean Architecture e InjeÃ§Ã£o de DependÃªncia (opcional, mas recomendado para Java Devs)
 dependency-injector>=4.41.0
+# --- API ---
+fastapi>=0.110.0
+uvicorn>=0.27.0
+python-multipart>=0.0.9
+pypdf>=4.0.0
