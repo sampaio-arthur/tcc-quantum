@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.wheels/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.pytype/
+.pyre/
+
+# Virtual envs
+.venv/
+venv/
+venv_*/
+*venv*/
+
+# Env files
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
