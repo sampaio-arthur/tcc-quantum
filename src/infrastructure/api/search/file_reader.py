@@ -1,25 +1,29 @@
-﻿from fastapi import HTTPException, UploadFile
+﻿import io
+
+from fastapi import HTTPException
 from pypdf import PdfReader
 
-
-def _read_txt(file: UploadFile) -> str:
-    content = file.file.read()
-    try:
-        return content.decode("utf-8")
-    except UnicodeDecodeError:
-        return content.decode("latin-1")
+from application.interfaces import DocumentTextExtractor
 
 
-def _read_pdf(file: UploadFile) -> str:
-    reader = PdfReader(file.file)
-    pages = [page.extract_text() or "" for page in reader.pages]
-    return "\n".join(pages).strip()
+class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
+    def extract(self, filename: str, content: bytes) -> str:
+        name = (filename or "").lower()
+        if name.endswith(".txt"):
+            return self._read_txt(content)
+        if name.endswith(".pdf"):
+            return self._read_pdf(content)
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use .txt or .pdf")
 
+    @staticmethod
+    def _read_txt(content: bytes) -> str:
+        try:
+            return content.decode("utf-8")
+        except UnicodeDecodeError:
+            return content.decode("latin-1")
 
-def parse_upload(file: UploadFile) -> str:
-    filename = (file.filename or "").lower()
-    if filename.endswith(".txt"):
-        return _read_txt(file)
-    if filename.endswith(".pdf"):
-        return _read_pdf(file)
-    raise HTTPException(status_code=400, detail="Unsupported file type. Use .txt or .pdf")
+    @staticmethod
+    def _read_pdf(content: bytes) -> str:
+        reader = PdfReader(io.BytesIO(content))
+        pages = [page.extract_text() or "" for page in reader.pages]
+        return "\n".join(pages).strip()

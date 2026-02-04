@@ -1,12 +1,11 @@
-﻿from typing import List
+﻿from fastapi import APIRouter, File, Form, UploadFile
 
-from fastapi import APIRouter, File, Form, UploadFile
-
+from application.dtos import DocumentDTO, SearchFileRequestDTO, SearchRequestDTO
 from application.services import SearchService
-from application.use_cases import RealizarBuscaUseCase
-from domain.entities import Document
-from infrastructure.api.search.file_reader import parse_upload
-from infrastructure.api.search.schemas import SearchRequest, SearchResponse, SearchResultOut
+from application.use_cases import BuscarPorArquivoUseCase, RealizarBuscaUseCase
+from infrastructure.api.search.file_reader import PdfTxtDocumentTextExtractor
+from infrastructure.api.search.schemas import SearchRequest as SearchRequestSchema
+from infrastructure.api.search.schemas import SearchResponse as SearchResponseSchema
 from infrastructure.embeddings import LocalEmbedder
 from infrastructure.quantum import SwapTestQuantumComparator
 
@@ -16,42 +15,34 @@ router = APIRouter(prefix="/search", tags=["search"])
 def _build_service() -> SearchService:
     embedder = LocalEmbedder()
     comparator = SwapTestQuantumComparator()
-    use_case = RealizarBuscaUseCase(embedder, comparator)
-    return SearchService(use_case)
+    buscar_use_case = RealizarBuscaUseCase(embedder, comparator)
+    buscar_por_arquivo_use_case = BuscarPorArquivoUseCase(PdfTxtDocumentTextExtractor())
+    return SearchService(buscar_use_case, buscar_por_arquivo_use_case)
 
 
-def _map_results(query: str, results) -> SearchResponse:
-    return SearchResponse(
-        query=query,
+def _to_response_schema(response) -> SearchResponseSchema:
+    return SearchResponseSchema(
+        query=response.query,
         results=[
-            SearchResultOut(
-                doc_id=item.document.doc_id,
-                text=item.document.text,
-                score=item.score,
-            )
-            for item in results
+            {"doc_id": item.doc_id, "text": item.text, "score": item.score}
+            for item in response.results
         ],
     )
 
 
-@router.post("", response_model=SearchResponse)
-def search(payload: SearchRequest) -> SearchResponse:
-    docs = [Document(doc_id=f"doc-{i+1}", text=text) for i, text in enumerate(payload.documents)]
-    if not docs:
-        return SearchResponse(query=payload.query, results=[])
-
+@router.post("", response_model=SearchResponseSchema)
+def search(payload: SearchRequestSchema) -> SearchResponseSchema:
+    docs = [DocumentDTO(doc_id=f"doc-{i+1}", text=text) for i, text in enumerate(payload.documents)]
     service = _build_service()
-    results = service.buscar(payload.query, docs)
-    return _map_results(payload.query, results)
+    dto = SearchRequestDTO(query=payload.query, documents=docs)
+    response = service.buscar_por_texto(dto)
+    return _to_response_schema(response)
 
 
-@router.post("/file", response_model=SearchResponse)
-def search_file(query: str = Form(...), file: UploadFile = File(...)) -> SearchResponse:
-    text = parse_upload(file)
-    if not text:
-        return SearchResponse(query=query, results=[])
-
-    docs = [Document(doc_id="uploaded-1", text=text)]
+@router.post("/file", response_model=SearchResponseSchema)
+def search_file(query: str = Form(...), file: UploadFile = File(...)) -> SearchResponseSchema:
+    content = file.file.read()
     service = _build_service()
-    results = service.buscar(query, docs)
-    return _map_results(query, results)
+    dto = SearchFileRequestDTO(query=query, filename=file.filename or "", content=content)
+    response = service.buscar_por_arquivo(dto)
+    return _to_response_schema(response)

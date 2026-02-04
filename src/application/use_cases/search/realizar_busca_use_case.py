@@ -1,7 +1,9 @@
 ﻿from dataclasses import dataclass
-from typing import Iterable, List
+from typing import Iterable
 
+from application.dtos import DocumentDTO, SearchResponseDTO
 from application.interfaces import Embedder, QuantumComparator
+from application.mappers.search import document_dto_to_entity, result_entity_to_dto
 from domain.entities import Document
 
 
@@ -16,11 +18,12 @@ class RealizarBuscaUseCase:
         self._embedder = embedder
         self._comparator = comparator
 
-    def execute(self, query: str, documents: Iterable[Document]) -> List[SearchResult]:
-        docs = list(documents)
-        if not docs:
-            return []
+    def execute(self, query: str, documents: Iterable[DocumentDTO]) -> SearchResponseDTO:
+        docs_dto = list(documents)
+        if not docs_dto:
+            return SearchResponseDTO(query=query, results=[])
 
+        docs = [document_dto_to_entity(dto) for dto in docs_dto]
         query_vector = self._embedder.embed_texts([query])[0]
         doc_vectors = self._embedder.embed_texts([doc.text for doc in docs])
 
@@ -29,4 +32,5 @@ class RealizarBuscaUseCase:
             for doc, vector in zip(docs, doc_vectors)
         ]
         results.sort(key=lambda item: item.score, reverse=True)
-        return results
+
+        return result_entity_to_dto(query, results)
