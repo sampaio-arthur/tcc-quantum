@@ -1,4 +1,4 @@
-﻿from application.dtos.common import DocumentDTO
+﻿from application.dtos.common import DocumentDTO, ErrorDTO
 from application.dtos.search import (
     SearchFileRequestDTO,
     SearchRequestDTO,
@@ -8,6 +8,7 @@ from application.dtos.search import (
 
 __all__ = [
     "DocumentDTO",
+    "ErrorDTO",
     "SearchRequestDTO",
     "SearchFileRequestDTO",
     "SearchResultDTO",
