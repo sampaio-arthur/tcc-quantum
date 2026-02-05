@@ -17,6 +17,9 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
     if existing:
         raise HTTPException(status_code=400, detail='Email already registered')
 
+    if len(payload.password.encode('utf-8')) > 72:
+        raise HTTPException(status_code=400, detail='Password too long (max 72 bytes)')
+
     user = User(email=payload.email, password_hash=get_password_hash(payload.password))
     db.add(user)
     db.commit()

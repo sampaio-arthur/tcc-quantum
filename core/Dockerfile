@@ -13,14 +13,12 @@ WORKDIR /app
 # Copia o requirements primeiro para aproveitar o cache de camadas do Docker
 COPY requirements.txt .
 
-# Instala as dependencias (sem usar cache do pip para diminuir a imagem)
-RUN pip install --no-cache-dir -r requirements.txt
+# Instala as dependencias com cache do pip (BuildKit)
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copia o restante do codigo
 COPY . .
-
-# Baixa o modelo durante o build para ja ficar na imagem
-RUN python download_models.py
 
 # Define o PYTHONPATH para que os imports da Clean Architecture funcionem
 ENV PYTHONPATH=/app/src
