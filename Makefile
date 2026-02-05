@@ -6,14 +6,14 @@ up:
 	docker compose up -d
 
 create-structure:
-	mkdir -p src/domain/entities src/domain/services src/application/use_cases src/infrastructure/quantum
-	touch src/main.py
+	mkdir -p core/src/domain/entities core/src/domain/services core/src/application/use_cases core/src/infrastructure/quantum
+	touch core/src/main.py
 
 run:
-	docker compose exec quantum-app python src/main.py
+	docker compose exec core python src/main.py
 
 test:
-	docker compose exec quantum-app pytest
+	docker compose exec core pytest
 
 down:
 	docker compose down

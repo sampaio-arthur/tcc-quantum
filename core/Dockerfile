@@ -23,7 +23,7 @@ COPY . .
 RUN python download_models.py
 
 # Define o PYTHONPATH para que os imports da Clean Architecture funcionem
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app/src
 
 # Comando para rodar a API
 CMD ["uvicorn", "infrastructure.api.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"]
