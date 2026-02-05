@@ -1,4 +1,4 @@
-﻿services:
+services:
   quantum-app:
     build: .
     container_name: quantum_search_tcc
@@ -10,4 +10,23 @@
       - PYTHONUNBUFFERED=1
     ports:
       - "8000:8000"
+    depends_on:
+      - db
     command: uvicorn infrastructure.api.fastapi_app:app --host 0.0.0.0 --port 8000
+
+  db:
+    image: mysql:8.0
+    container_name: quantum_search_mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_DATABASE=tcc
+      - MYSQL_USER=tcc
+      - MYSQL_PASSWORD=tcc
+      - MYSQL_ROOT_PASSWORD=tccroot
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+volumes:
+  mysql_data:

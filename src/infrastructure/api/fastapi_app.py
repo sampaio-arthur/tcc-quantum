@@ -1,7 +1,10 @@
-﻿from fastapi import FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from infrastructure.api.auth import router as auth_router
 from infrastructure.api.search.search_controller import router as search_router
+from infrastructure.api.chat import router as chat_router
+from infrastructure.persistence.database import init_db
 
 app = FastAPI(title="Quantum Search TCC")
 
@@ -14,7 +17,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router)
 app.include_router(search_router)
+app.include_router(chat_router)
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    init_db()
 
 
 @app.get("/health")
