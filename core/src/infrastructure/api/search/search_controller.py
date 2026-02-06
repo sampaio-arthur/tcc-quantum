@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, UploadFile
 
 from application.dtos import DocumentDTO, SearchFileRequestDTO, SearchRequestDTO
 from application.services import SearchService
@@ -27,6 +27,7 @@ def _to_response_schema(response) -> SearchResponseSchema:
             {"doc_id": item.doc_id, "text": item.text, "score": item.score}
             for item in response.results
         ],
+        answer=response.answer,
     )
 
 

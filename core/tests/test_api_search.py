@@ -1,4 +1,4 @@
-﻿from fastapi.testclient import TestClient
+from fastapi.testclient import TestClient
 
 from infrastructure.api.fastapi_app import app
 
@@ -18,6 +18,7 @@ def test_search_endpoint():
     data = response.json()
     assert data["query"] == "algoritmos"
     assert len(data["results"]) == 2
+    assert data["answer"]
 
 
 def test_search_file_endpoint_txt():
@@ -31,3 +32,4 @@ def test_search_file_endpoint_txt():
     data = response.json()
     assert data["query"] == "algoritmos"
     assert len(data["results"]) == 1
+    assert data["answer"]

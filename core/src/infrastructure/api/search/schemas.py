@@ -1,4 +1,4 @@
-﻿from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel
 
@@ -17,3 +17,4 @@ class SearchResultOut(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     results: List[SearchResultOut]
+    answer: Optional[str] = None

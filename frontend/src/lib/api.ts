@@ -37,6 +37,7 @@ export interface SearchResult {
 export interface SearchResponse {
   query: string;
   results: SearchResult[];
+  answer?: string;
 }
 
 class ApiClient {
@@ -201,3 +202,4 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
+

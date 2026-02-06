@@ -90,13 +90,21 @@ export default function Chat() {
 
       // Generate assistant response based on search results
       let assistantContent = '';
-      if (searchResponse.results.length > 0) {
+      if (searchResponse.answer) {
+        assistantContent = searchResponse.answer;
+        if (searchResponse.results.length > 0) {
+          assistantContent += '\n\nFontes:\n';
+          searchResponse.results.slice(0, 3).forEach((result, index) => {
+            assistantContent += `**${index + 1}.** ${result.text}\n(Relev‚ncia: ${(result.score * 100).toFixed(1)}%)\n\n`;
+          });
+        }
+      } else if (searchResponse.results.length > 0) {
         assistantContent = `Encontrei ${searchResponse.results.length} resultado(s) relevante(s):\n\n`;
         searchResponse.results.forEach((result, index) => {
-          assistantContent += `**${index + 1}.** ${result.text}\n(Relev√¢ncia: ${(result.score * 100).toFixed(1)}%)\n\n`;
+          assistantContent += `**${index + 1}.** ${result.text}\n(Relev‚ncia: ${(result.score * 100).toFixed(1)}%)\n\n`;
         });
       } else {
-        assistantContent = 'N√£o encontrei resultados relevantes para sua busca. Tente reformular sua pergunta ou anexar um documento para an√°lise.';
+        assistantContent = 'Nao encontrei resultados relevantes para sua busca. Tente reformular sua pergunta ou anexar um documento para analise.';
       }
 
       // Add assistant message
@@ -175,3 +183,10 @@ export default function Chat() {
     </div>
   );
 }
+
+
+
+
+
+
+

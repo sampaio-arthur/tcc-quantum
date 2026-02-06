@@ -1,5 +1,5 @@
-﻿from dataclasses import dataclass
-from typing import List
+from dataclasses import dataclass
+from typing import List, Optional
 
 from application.dtos.common import DocumentDTO
 
@@ -28,3 +28,4 @@ class SearchResultDTO:
 class SearchResponseDTO:
     query: str
     results: List[SearchResultDTO]
+    answer: Optional[str] = None
