@@ -103,20 +103,34 @@ username=<email>&password=<senha>
   "documents": [
     "documento 1",
     "documento 2"
-  ]
+  ],
+  "mode": "classical",
+  "top_k": 5,
+  "candidate_k": 20
 }
 ```
+- `mode` pode ser: `classical`, `quantum`, `compare`
 - Response 200 (JSON):
 ```json
 {
   "query": "texto da pergunta",
+  "mode": "classical",
   "results": [
     {
       "doc_id": "doc-1",
       "text": "documento 1",
       "score": 0.87
     }
-  ]
+  ],
+  "metrics": {
+    "recall_at_k": null,
+    "mrr": null,
+    "ndcg_at_k": null,
+    "latency_ms": 12.4,
+    "k": 5,
+    "candidate_k": 20,
+    "has_labels": false
+  }
 }
 ```
 
@@ -127,16 +141,81 @@ username=<email>&password=<senha>
 - Body (form-data):
   - `query` (string)
   - `file` (UploadFile: PDF ou TXT)
+  - `mode` (opcional)
+  - `top_k` (opcional)
+  - `candidate_k` (opcional)
 - Response 200 (JSON):
 ```json
 {
   "query": "texto da pergunta",
+  "mode": "compare",
   "results": [
     {
       "doc_id": "doc-1",
       "text": "trecho do documento",
       "score": 0.91
     }
+  ],
+  "comparison": {
+    "classical": {
+      "results": [
+        {"doc_id": "doc-1", "text": "trecho", "score": 0.91}
+      ],
+      "metrics": {"latency_ms": 10.2, "k": 5, "candidate_k": 20, "has_labels": false}
+    },
+    "quantum": {
+      "results": [
+        {"doc_id": "doc-1", "text": "trecho", "score": 0.88}
+      ],
+      "metrics": {"latency_ms": 18.6, "k": 5, "candidate_k": 20, "has_labels": false}
+    }
+  }
+}
+```
+
+#### Busca em dataset publico
+**POST** `/search/dataset`
+- Auth: nao
+- Body (JSON):
+```json
+{
+  "dataset_id": "mini-rag",
+  "query_id": "q1",
+  "mode": "compare",
+  "top_k": 5,
+  "candidate_k": 20
+}
+```
+- Response 200 (JSON) inclui `metrics` com rotulos de relevancia quando disponiveis.
+
+### Datasets
+#### Listar datasets
+**GET** `/datasets`
+- Auth: nao
+- Response 200 (JSON):
+```json
+[
+  {
+    "dataset_id": "mini-rag",
+    "name": "Mini RAG/Quantum",
+    "description": "Conjunto reduzido para avaliacao",
+    "document_count": 6,
+    "query_count": 5
+  }
+]
+```
+
+#### Detalhar dataset
+**GET** `/datasets/{dataset_id}`
+- Auth: nao
+- Response 200 (JSON):
+```json
+{
+  "dataset_id": "mini-rag",
+  "name": "Mini RAG/Quantum",
+  "description": "Conjunto reduzido para avaliacao",
+  "queries": [
+    {"query_id": "q1", "query": "Como o RAG usa busca semantica?", "relevant_count": 2}
   ]
 }
 ```
@@ -197,34 +276,3 @@ Todas as rotas abaixo exigem Bearer JWT.
 ```
 - Erros:
   - 404: `Conversation not found`
-
-#### Adicionar mensagem
-**POST** `/conversations/{conversation_id}/messages`
-- Auth: Bearer JWT
-- Body (JSON):
-```json
-{
-  "role": "user",
-  "content": "Minha mensagem"
-}
-```
-- Roles aceitas: `user`, `assistant`, `system`
-- Response 201 (JSON):
-```json
-{
-  "id": 101,
-  "role": "user",
-  "content": "Minha mensagem",
-  "created_at": "2026-02-05T12:06:00Z"
-}
-```
-- Erros:
-  - 400: `Invalid role`
-  - 404: `Conversation not found`
-
-## Observacoes para o Frontend
-- Prefixo base: `http://localhost:8000`
-- Endpoints protegidos: `/auth/me`, `/conversations*`
-- Login usa `application/x-www-form-urlencoded` (nao JSON)
-- Upload de arquivo deve ser `multipart/form-data`
-

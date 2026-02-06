@@ -2,11 +2,9 @@ from dataclasses import dataclass
 import re
 from typing import Iterable, List
 
-import numpy as np
-
-from application.dtos import DocumentDTO, SearchResponseDTO
+from application.dtos import DocumentDTO
 from application.interfaces import Embedder, QuantumComparator
-from application.mappers.search import document_dto_to_entity, result_entity_to_dto
+from application.mappers.search import document_dto_to_entity
 from domain.entities import Document
 
 
@@ -27,37 +25,61 @@ def _split_sentences(text: str) -> List[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
-def _cosine_similarity(vector_a: np.ndarray, vector_b: np.ndarray) -> float:
-    denom = np.linalg.norm(vector_a) * np.linalg.norm(vector_b)
-    if denom == 0:
-        return 0.0
-    return float(np.dot(vector_a, vector_b) / denom)
-
-
 class RealizarBuscaUseCase:
-    def __init__(self, embedder: Embedder, comparator: QuantumComparator) -> None:
+    def __init__(
+        self,
+        embedder: Embedder,
+        classical_comparator: QuantumComparator,
+        quantum_comparator: QuantumComparator,
+    ) -> None:
         self._embedder = embedder
-        self._comparator = comparator
+        self._classical_comparator = classical_comparator
+        self._quantum_comparator = quantum_comparator
 
-    def execute(self, query: str, documents: Iterable[DocumentDTO]) -> SearchResponseDTO:
+    def score(
+        self,
+        query: str,
+        documents: Iterable[DocumentDTO],
+        mode: str = "classical",
+        candidate_k: int = 20,
+    ) -> List[SearchResult]:
         docs_dto = list(documents)
         if not docs_dto:
-            return SearchResponseDTO(query=query, results=[], answer=None)
+            return []
 
         docs = [document_dto_to_entity(dto) for dto in docs_dto]
         query_vector = self._embedder.embed_texts([query])[0]
         doc_vectors = self._embedder.embed_texts([doc.text for doc in docs])
 
-        results = [
-            SearchResult(document=doc, score=self._comparator.compare(query_vector, vector))
-            for doc, vector in zip(docs, doc_vectors)
+        base_scores = [
+            self._classical_comparator.compare(query_vector, vector)
+            for vector in doc_vectors
         ]
+
+        if mode == "quantum":
+            candidate_k = max(1, min(candidate_k, len(docs)))
+            candidate_indices = sorted(
+                range(len(base_scores)),
+                key=lambda i: base_scores[i],
+                reverse=True,
+            )[:candidate_k]
+            results = [
+                SearchResult(
+                    document=docs[i],
+                    score=self._quantum_comparator.compare(query_vector, doc_vectors[i]),
+                )
+                for i in candidate_indices
+            ]
+        else:
+            results = [
+                SearchResult(document=doc, score=score)
+                for doc, score in zip(docs, base_scores)
+            ]
+
         results.sort(key=lambda item: item.score, reverse=True)
+        return results
 
-        answer = self._build_answer(query, results)
-        return result_entity_to_dto(query, results, answer=answer)
-
-    def _build_answer(self, query: str, results: List[SearchResult]) -> str | None:
+    def build_answer(self, query: str, results: List[SearchResult]) -> str | None:
         if not results:
             return None
 
@@ -79,7 +101,7 @@ class RealizarBuscaUseCase:
         query_vector = self._embedder.embed_texts([query])[0]
         sentence_vectors = self._embedder.embed_texts(candidates)
         scores = [
-            _cosine_similarity(query_vector, np.array(vector, dtype=float))
+            self._classical_comparator.compare(query_vector, vector)
             for vector in sentence_vectors
         ]
 

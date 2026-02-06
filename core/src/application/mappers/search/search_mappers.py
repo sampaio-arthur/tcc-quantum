@@ -1,4 +1,6 @@
-from application.dtos import DocumentDTO, SearchResponseDTO, SearchResultDTO
+from typing import Iterable
+
+from application.dtos import DocumentDTO, SearchResultDTO
 from domain.entities import Document
 
 
@@ -10,12 +12,8 @@ def document_entity_to_dto(entity: Document) -> DocumentDTO:
     return DocumentDTO(doc_id=entity.doc_id, text=entity.text)
 
 
-def result_entity_to_dto(query: str, results, answer: str | None = None) -> SearchResponseDTO:
-    return SearchResponseDTO(
-        query=query,
-        results=[
-            SearchResultDTO(doc_id=item.document.doc_id, text=item.document.text, score=item.score)
-            for item in results
-        ],
-        answer=answer,
-    )
+def results_to_dtos(results: Iterable) -> list[SearchResultDTO]:
+    return [
+        SearchResultDTO(doc_id=item.document.doc_id, text=item.document.text, score=item.score)
+        for item in results
+    ]

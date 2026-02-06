@@ -34,10 +34,59 @@ export interface SearchResult {
   score: number;
 }
 
-export interface SearchResponse {
-  query: string;
+export interface SearchMetrics {
+  recall_at_k?: number | null;
+  mrr?: number | null;
+  ndcg_at_k?: number | null;
+  latency_ms: number;
+  k: number;
+  candidate_k: number;
+  has_labels: boolean;
+}
+
+export interface SearchResponseLite {
   results: SearchResult[];
   answer?: string;
+  metrics?: SearchMetrics;
+}
+
+export interface SearchComparison {
+  classical: SearchResponseLite;
+  quantum: SearchResponseLite;
+}
+
+export interface SearchResponse {
+  query: string;
+  mode: string;
+  results: SearchResult[];
+  answer?: string;
+  metrics?: SearchMetrics;
+  comparison?: SearchComparison;
+}
+
+export interface DatasetSummary {
+  dataset_id: string;
+  name: string;
+  description: string;
+  document_count: number;
+  query_count: number;
+}
+
+export interface DatasetQuery {
+  query_id: string;
+  query: string;
+  relevant_count: number;
+}
+
+export interface DatasetDetail {
+  dataset_id: string;
+  name: string;
+  description: string;
+  queries: DatasetQuery[];
+}
+
+export interface SearchOptions {
+  mode?: string;
 }
 
 class ApiClient {
@@ -90,7 +139,7 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Credenciais inv√°lidas');
+      throw new Error(error.detail || 'Credenciais inv·lidas');
     }
 
     const data = await response.json();
@@ -104,7 +153,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('N√£o autenticado');
+      throw new Error('N„o autenticado');
     }
 
     return response.json();
@@ -146,7 +195,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Conversa n√£o encontrada');
+      throw new Error('Conversa n„o encontrada');
     }
 
     return response.json();
@@ -166,10 +215,57 @@ class ApiClient {
     return response.json();
   }
 
-  async searchWithFile(query: string, file: File): Promise<SearchResponse> {
+  async getDatasets(): Promise<DatasetSummary[]> {
+    const response = await fetch(`${API_BASE_URL}/datasets`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro ao carregar datasets');
+    }
+
+    return response.json();
+  }
+
+  async getDataset(datasetId: string): Promise<DatasetDetail> {
+    const response = await fetch(`${API_BASE_URL}/datasets/${datasetId}`, {
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error('Dataset n„o encontrado');
+    }
+
+    return response.json();
+  }
+
+  async searchDataset(
+    datasetId: string,
+    queryId: string,
+    options: SearchOptions = {}
+  ): Promise<SearchResponse> {
+    const response = await fetch(`${API_BASE_URL}/search/dataset`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        dataset_id: datasetId,
+        query_id: queryId,
+        mode: options.mode ?? 'compare',
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro na busca do dataset');
+    }
+
+    return response.json();
+  }
+
+  async searchWithFile(query: string, file: File, options: SearchOptions = {}): Promise<SearchResponse> {
     const formData = new FormData();
     formData.append('query', query);
     formData.append('file', file);
+    formData.append('mode', options.mode ?? 'classical');
 
     const response = await fetch(`${API_BASE_URL}/search/file`, {
       method: 'POST',
@@ -186,11 +282,15 @@ class ApiClient {
     return response.json();
   }
 
-  async search(query: string, documents: string[]): Promise<SearchResponse> {
+  async search(query: string, documents: string[], options: SearchOptions = {}): Promise<SearchResponse> {
     const response = await fetch(`${API_BASE_URL}/search`, {
       method: 'POST',
       headers: this.getHeaders(),
-      body: JSON.stringify({ query, documents }),
+      body: JSON.stringify({
+        query,
+        documents,
+        mode: options.mode ?? 'classical',
+      }),
     });
 
     if (!response.ok) {
@@ -202,4 +302,3 @@ class ApiClient {
 }
 
 export const api = new ApiClient();
-

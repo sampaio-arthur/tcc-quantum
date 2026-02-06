@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from infrastructure.api.auth import router as auth_router
 from infrastructure.api.search.search_controller import router as search_router
 from infrastructure.api.chat import router as chat_router
+from infrastructure.api.datasets import router as datasets_router
 from infrastructure.persistence.database import init_db
 
 app = FastAPI(title="Quantum Search TCC")
@@ -20,6 +21,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(search_router)
 app.include_router(chat_router)
+app.include_router(datasets_router)
 
 
 @app.on_event("startup")

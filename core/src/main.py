@@ -1,9 +1,9 @@
-﻿from application.dtos import DocumentDTO, SearchRequestDTO
+from application.dtos import DocumentDTO, SearchRequestDTO
 from application.services import SearchService
 from application.use_cases import BuscarPorArquivoUseCase, RealizarBuscaUseCase
 from infrastructure.api.search.file_reader import PdfTxtDocumentTextExtractor
 from infrastructure.embeddings import LocalEmbedder
-from infrastructure.quantum import SwapTestQuantumComparator
+from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumComparator
 
 
 def main() -> None:
@@ -15,13 +15,14 @@ def main() -> None:
     ]
 
     embedder = LocalEmbedder()
-    comparator = SwapTestQuantumComparator()
-    buscar_use_case = RealizarBuscaUseCase(embedder, comparator)
+    classical = CosineSimilarityComparator()
+    quantum = SwapTestQuantumComparator()
+    buscar_use_case = RealizarBuscaUseCase(embedder, classical, quantum)
     buscar_por_arquivo_use_case = BuscarPorArquivoUseCase(PdfTxtDocumentTextExtractor())
     service = SearchService(buscar_use_case, buscar_por_arquivo_use_case)
 
     request = SearchRequestDTO(query=query, documents=documents)
-    response = service.buscar_por_texto(request)
+    response = service.buscar_por_texto(request, mode="classical")
 
     print(f"Consulta: {response.query}")
     for item in response.results:
