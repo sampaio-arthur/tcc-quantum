@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, MessageSquare, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
+import { Plus, MessageSquare, ChevronLeft, LogOut, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -12,6 +12,7 @@ interface ChatSidebarProps {
   activeConversationId: number | null;
   onSelectConversation: (id: number) => void;
   onNewConversation: () => void;
+  onDeleteConversation: (id: number) => void;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
 }
@@ -21,6 +22,7 @@ export function ChatSidebar({
   activeConversationId,
   onSelectConversation,
   onNewConversation,
+  onDeleteConversation,
   isCollapsed,
   onToggleCollapse,
 }: ChatSidebarProps) {
@@ -75,19 +77,46 @@ export function ChatSidebar({
           <p className="px-3 py-2 text-xs text-muted-foreground font-medium">
             Seus chats
           </p>
-          {conversations.map((conversation) => (
-            <button
-              key={conversation.id}
-              onClick={() => onSelectConversation(conversation.id)}
-              className={cn(
-                'sidebar-item w-full text-left text-sm text-sidebar-foreground',
-                activeConversationId === conversation.id && 'active'
-              )}
-            >
-              <MessageSquare className="h-4 w-4 flex-shrink-0" />
-              <span className="truncate">{conversation.title}</span>
-            </button>
-          ))}
+          {conversations.map((conversation) => {
+            const title = conversation.title || 'Sem titulo';
+            return (
+              <div
+                key={conversation.id}
+                onClick={() => onSelectConversation(conversation.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelectConversation(conversation.id);
+                  }
+                }}
+                className={cn(
+                  'sidebar-item w-full text-left text-sm text-sidebar-foreground min-w-0',
+                  activeConversationId === conversation.id && 'active'
+                )}
+              >
+                <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                <span
+                  className="flex-1 min-w-0 truncate"
+                  title={title}
+                >
+                  {title}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteConversation(conversation.id);
+                  }}
+                  className="h-6 w-6 text-muted-foreground hover:text-foreground flex-shrink-0"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            );
+          })}
         </div>
       </ScrollArea>
 

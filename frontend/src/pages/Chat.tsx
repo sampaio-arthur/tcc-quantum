@@ -7,8 +7,9 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { MessageList } from '@/components/chat/MessageList';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ComparisonPanel } from '@/components/chat/ComparisonPanel';
+import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, Conversation, DatasetDetail, DatasetSummary, Message, SearchResponse } from '@/lib/api';
+import { api, Conversation, Message, SearchResponse } from '@/lib/api';
 
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
@@ -19,14 +20,6 @@ export default function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  const [source, setSource] = useState<'file' | 'dataset'>('file');
-  const [mode, setMode] = useState<'classical' | 'quantum' | 'compare'>('compare');
-
-  const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
-  const [selectedDatasetId, setSelectedDatasetId] = useState('');
-  const [datasetDetail, setDatasetDetail] = useState<DatasetDetail | null>(null);
-  const [selectedQueryId, setSelectedQueryId] = useState('');
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
@@ -43,33 +36,6 @@ export default function Chat() {
       loadConversations();
     }
   }, [user]);
-
-  useEffect(() => {
-    api.getDatasets()
-      .then(setDatasets)
-      .catch((error) => {
-        console.error('Error loading datasets:', error);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (!selectedDatasetId) {
-      setDatasetDetail(null);
-      setSelectedQueryId('');
-      return;
-    }
-
-    api.getDataset(selectedDatasetId)
-      .then((detail) => {
-        setDatasetDetail(detail);
-        if (detail.queries.length > 0) {
-          setSelectedQueryId(detail.queries[0].query_id);
-        }
-      })
-      .catch((error) => {
-        console.error('Error loading dataset detail:', error);
-      });
-  }, [selectedDatasetId]);
 
   const loadConversations = async () => {
     try {
@@ -96,24 +62,30 @@ export default function Chat() {
     setLastResponse(null);
   };
 
+  const handleDeleteConversation = async (id: number) => {
+    try {
+      await api.deleteConversation(id);
+      setConversations((prev) => prev.filter((item) => item.id !== id));
+      if (activeConversationId === id) {
+        setActiveConversationId(null);
+        setMessages([]);
+        setLastResponse(null);
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+    }
+  };
+
   const buildAssistantContent = (searchResponse: SearchResponse) => {
     let assistantContent = '';
 
-    if (searchResponse.answer) {
-      assistantContent = searchResponse.answer;
-      if (searchResponse.results.length > 0) {
-        assistantContent += '\n\nFontes:\n';
-        searchResponse.results.slice(0, 3).forEach((result, index) => {
-          assistantContent += `**${index + 1}.** ${result.text}\n(Relevancia: ${(result.score * 100).toFixed(1)}%)\n\n`;
-        });
-      }
-    } else if (searchResponse.results.length > 0) {
-      assistantContent = `Encontrei ${searchResponse.results.length} resultado(s) relevante(s):\n\n`;
-      searchResponse.results.forEach((result, index) => {
+    if (searchResponse.results.length > 0) {
+      assistantContent += 'Resultados:\n';
+      searchResponse.results.slice(0, 3).forEach((result, index) => {
         assistantContent += `**${index + 1}.** ${result.text}\n(Relevancia: ${(result.score * 100).toFixed(1)}%)\n\n`;
       });
     } else {
-      assistantContent = 'Nao encontrei resultados relevantes para sua busca. Tente reformular sua pergunta ou anexar um documento para analise.';
+      assistantContent = 'Nao encontrei resultados relevantes para sua busca.';
     }
 
     if (searchResponse.comparison) {
@@ -126,59 +98,35 @@ export default function Chat() {
       }
     }
 
-    return assistantContent;
+    return assistantContent.trim();
   };
 
-  const handleSendMessage = async (content: string, file?: File) => {
-    if (!content.trim() && !file && source !== 'dataset') return;
-
+  const handleSendMessage = async (filename: string, file: File) => {
     setIsLoading(true);
 
     try {
       let conversationId = activeConversationId;
 
-      const datasetQueryText = datasetDetail?.queries.find((query) => query.query_id === selectedQueryId)?.query;
-      const effectiveQuery = source === 'dataset' ? (datasetQueryText ?? content) : content;
-
-      if (source === 'dataset' && !selectedDatasetId) {
-        throw new Error('Selecione um dataset para continuar.');
-      }
-
-      if (source === 'dataset' && !selectedQueryId) {
-        throw new Error('Selecione uma consulta do dataset.');
-      }
-
-      // Create new conversation if needed
       if (!conversationId) {
-        const title = effectiveQuery.slice(0, 50) + (effectiveQuery.length > 50 ? '...' : '');
-        const newConversation = await api.createConversation(title);
+        const newConversation = await api.createConversation(filename);
         conversationId = newConversation.id;
         setActiveConversationId(conversationId);
         setConversations(prev => [newConversation, ...prev]);
       }
 
-      // Add user message
-      const userMessage = await api.addMessage(conversationId, 'user', effectiveQuery);
+      const userMessage = await api.addMessage(conversationId, 'user', filename);
       setMessages(prev => [...prev, userMessage]);
 
-      let searchResponse: SearchResponse;
-      const options = { mode };
-
-      if (source === 'dataset') {
-        searchResponse = await api.searchDataset(selectedDatasetId, selectedQueryId, options);
-      } else if (file) {
-        searchResponse = await api.searchWithFile(effectiveQuery, file, options);
-      } else {
-        searchResponse = await api.search(effectiveQuery, [], options);
-      }
+      const searchResponse = await api.searchWithFile(filename, file, { mode: 'compare' });
 
       setLastResponse(searchResponse);
 
       const assistantContent = buildAssistantContent(searchResponse);
 
-      // Add assistant message
-      const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
-      setMessages(prev => [...prev, assistantMessage]);
+      if (assistantContent.length > 0) {
+        const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
+        setMessages(prev => [...prev, assistantMessage]);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       setMessages(prev => [
@@ -215,6 +163,7 @@ export default function Chat() {
         activeConversationId={activeConversationId}
         onSelectConversation={loadConversation}
         onNewConversation={handleNewConversation}
+        onDeleteConversation={handleDeleteConversation}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
@@ -236,77 +185,15 @@ export default function Chat() {
           <h1 className="text-lg font-medium">Quantum Search</h1>
         </header>
 
-        {/* Controls */}
-        <section className="border-b border-border bg-background/80">
-          <div className="max-w-3xl mx-auto px-4 py-4 grid gap-3 md:grid-cols-2">
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Fonte</label>
-              <select
-                value={source}
-                onChange={(event) => setSource(event.target.value as 'file' | 'dataset')}
-                className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm"
-              >
-                <option value="file">PDF/TXT</option>
-                <option value="dataset">Dataset publico</option>
-              </select>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground">Modo</label>
-              <select
-                value={mode}
-                onChange={(event) => setMode(event.target.value as 'classical' | 'quantum' | 'compare')}
-                className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm"
-              >
-                <option value="classical">Classico</option>
-                <option value="quantum">Quantico</option>
-                <option value="compare">Comparar</option>
-              </select>
-            </div>
-          </div>
-
-          {source === 'dataset' && (
-            <div className="max-w-3xl mx-auto px-4 pb-4 grid gap-3 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Dataset</label>
-                <select
-                  value={selectedDatasetId}
-                  onChange={(event) => setSelectedDatasetId(event.target.value)}
-                  className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm"
-                >
-                  <option value="">Selecione</option>
-                  {datasets.map((dataset) => (
-                    <option key={dataset.dataset_id} value={dataset.dataset_id}>
-                      {dataset.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Consulta</label>
-                <select
-                  value={selectedQueryId}
-                  onChange={(event) => setSelectedQueryId(event.target.value)}
-                  className="w-full rounded-lg bg-muted border border-border px-3 py-2 text-sm"
-                >
-                  <option value="">Selecione</option>
-                  {datasetDetail?.queries.map((query) => (
-                    <option key={query.query_id} value={query.query_id}>
-                      {query.query}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-        </section>
-
         {/* Messages or Welcome */}
         {messages.length === 0 && !isLoading ? (
           <WelcomeScreen />
         ) : (
           <MessageList messages={messages} isLoading={isLoading} />
         )}
+
+        {/* Pipeline */}
+        <PipelinePanel visible={Boolean(lastResponse)} />
 
         {/* Comparison Panel */}
         <ComparisonPanel response={lastResponse} />
@@ -316,9 +203,6 @@ export default function Chat() {
           <ChatInput
             onSendMessage={handleSendMessage}
             isLoading={isLoading}
-            allowFile={source === 'file'}
-            allowEmptyMessage={source === 'dataset'}
-            placeholder={source === 'dataset' ? 'Selecione uma consulta do dataset acima' : 'Pergunte alguma coisa'}
           />
         </div>
       </main>

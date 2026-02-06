@@ -64,31 +64,6 @@ export interface SearchResponse {
   comparison?: SearchComparison;
 }
 
-export interface DatasetSummary {
-  dataset_id: string;
-  name: string;
-  description: string;
-  document_count: number;
-  query_count: number;
-}
-
-export interface DatasetQuery {
-  query_id: string;
-  query: string;
-  relevant_count: number;
-}
-
-export interface DatasetDetail {
-  dataset_id: string;
-  name: string;
-  description: string;
-  queries: DatasetQuery[];
-}
-
-export interface SearchOptions {
-  mode?: string;
-}
-
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('access_token');
@@ -189,6 +164,17 @@ class ApiClient {
     return response.json();
   }
 
+  async deleteConversation(id: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro ao remover conversa');
+    }
+  }
+
   async getConversation(id: number): Promise<ConversationDetail> {
     const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
       headers: this.getHeaders(),
@@ -215,57 +201,11 @@ class ApiClient {
     return response.json();
   }
 
-  async getDatasets(): Promise<DatasetSummary[]> {
-    const response = await fetch(`${API_BASE_URL}/datasets`, {
-      headers: this.getHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('Erro ao carregar datasets');
-    }
-
-    return response.json();
-  }
-
-  async getDataset(datasetId: string): Promise<DatasetDetail> {
-    const response = await fetch(`${API_BASE_URL}/datasets/${datasetId}`, {
-      headers: this.getHeaders(),
-    });
-
-    if (!response.ok) {
-      throw new Error('Dataset não encontrado');
-    }
-
-    return response.json();
-  }
-
-  async searchDataset(
-    datasetId: string,
-    queryId: string,
-    options: SearchOptions = {}
-  ): Promise<SearchResponse> {
-    const response = await fetch(`${API_BASE_URL}/search/dataset`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        dataset_id: datasetId,
-        query_id: queryId,
-        mode: options.mode ?? 'compare',
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Erro na busca do dataset');
-    }
-
-    return response.json();
-  }
-
-  async searchWithFile(query: string, file: File, options: SearchOptions = {}): Promise<SearchResponse> {
+  async searchWithFile(query: string, file: File): Promise<SearchResponse> {
     const formData = new FormData();
     formData.append('query', query);
     formData.append('file', file);
-    formData.append('mode', options.mode ?? 'classical');
+    formData.append('mode', 'compare');
 
     const response = await fetch(`${API_BASE_URL}/search/file`, {
       method: 'POST',
@@ -273,24 +213,6 @@ class ApiClient {
         Authorization: `Bearer ${this.getToken()}`,
       },
       body: formData,
-    });
-
-    if (!response.ok) {
-      throw new Error('Erro na busca');
-    }
-
-    return response.json();
-  }
-
-  async search(query: string, documents: string[], options: SearchOptions = {}): Promise<SearchResponse> {
-    const response = await fetch(`${API_BASE_URL}/search`, {
-      method: 'POST',
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        query,
-        documents,
-        mode: options.mode ?? 'classical',
-      }),
     });
 
     if (!response.ok) {
