@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface ChatInputProps {
-  onSendMessage: (message: string, file: File) => void;
+  onSendMessage: (message: string, file: File) => Promise<void> | void;
   isLoading?: boolean;
 }
 
@@ -12,9 +12,11 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!attachedFile || isLoading) return;
-    onSendMessage(attachedFile.name, attachedFile);
+    const file = attachedFile;
+    setAttachedFile(null);
+    await onSendMessage(file.name, file);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

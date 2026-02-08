@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+﻿import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -169,7 +169,7 @@ export default function Chat() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Header */}
         <header className="h-14 flex items-center px-4 border-b border-border">
           {isSidebarCollapsed && (
@@ -185,18 +185,20 @@ export default function Chat() {
           <h1 className="text-lg font-medium">Quantum Search</h1>
         </header>
 
-        {/* Messages or Welcome */}
-        {messages.length === 0 && !isLoading ? (
-          <WelcomeScreen />
-        ) : (
-          <MessageList messages={messages} isLoading={isLoading} />
-        )}
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* Messages or Welcome */}
+          {messages.length === 0 && !isLoading ? (
+            <WelcomeScreen />
+          ) : (
+            <MessageList messages={messages} isLoading={isLoading} />
+          )}
 
-        {/* Pipeline */}
-        <PipelinePanel visible={Boolean(lastResponse)} />
+          {/* Pipeline */}
+          <PipelinePanel visible={Boolean(lastResponse)} />
 
-        {/* Comparison Panel */}
-        <ComparisonPanel response={lastResponse} />
+          {/* Comparison Panel */}
+          <ComparisonPanel response={lastResponse} />
+        </div>
 
         {/* Input */}
         <div className="pb-6 pt-2">
