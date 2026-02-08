@@ -53,6 +53,7 @@ export function ChatSidebar({
           variant="ghost"
           size="icon"
           onClick={onNewConversation}
+          aria-label="Novo chat"
           className="text-sidebar-foreground hover:bg-sidebar-accent"
         >
           <Plus className="h-5 w-5" />
@@ -92,7 +93,7 @@ export function ChatSidebar({
                   }
                 }}
                 className={cn(
-                  'sidebar-item w-full text-left text-sm text-sidebar-foreground min-w-0',
+                  'sidebar-item grid grid-cols-[auto,1fr,auto] items-center w-full text-left text-sm text-sidebar-foreground min-w-0',
                   activeConversationId === conversation.id && 'active'
                 )}
               >
@@ -110,9 +111,10 @@ export function ChatSidebar({
                     event.stopPropagation();
                     onDeleteConversation(conversation.id);
                   }}
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground flex-shrink-0"
+                  aria-label="Excluir chat"
+                  className="ml-2 h-7 w-7 text-red-500 bg-red-500/20 hover:bg-red-500/30 hover:text-red-400 flex-shrink-0"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             );
