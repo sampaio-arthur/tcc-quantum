@@ -23,6 +23,27 @@ export default function Chat() {
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
+  const responseCacheKey = (id: number) => `qs:lastResponse:${id}`;
+
+  const loadCachedResponse = (id: number): SearchResponse | null => {
+    const raw = localStorage.getItem(responseCacheKey(id));
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as SearchResponse;
+    } catch {
+      localStorage.removeItem(responseCacheKey(id));
+      return null;
+    }
+  };
+
+  const saveCachedResponse = (id: number, response: SearchResponse) => {
+    localStorage.setItem(responseCacheKey(id), JSON.stringify(response));
+  };
+
+  const clearCachedResponse = (id: number) => {
+    localStorage.removeItem(responseCacheKey(id));
+  };
+
   // Redirect to auth if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
@@ -51,6 +72,7 @@ export default function Chat() {
       const data = await api.getConversation(id);
       setMessages(data.messages);
       setActiveConversationId(id);
+      setLastResponse(loadCachedResponse(id));
     } catch (error) {
       console.error('Error loading conversation:', error);
     }
@@ -65,6 +87,7 @@ export default function Chat() {
   const handleDeleteConversation = async (id: number) => {
     try {
       await api.deleteConversation(id);
+      clearCachedResponse(id);
       setConversations((prev) => prev.filter((item) => item.id !== id));
       if (activeConversationId === id) {
         setActiveConversationId(null);
@@ -120,6 +143,9 @@ export default function Chat() {
       const searchResponse = await api.searchWithFile(filename, file, { mode: 'compare' });
 
       setLastResponse(searchResponse);
+      if (conversationId) {
+        saveCachedResponse(conversationId, searchResponse);
+      }
 
       const assistantContent = buildAssistantContent(searchResponse);
 
