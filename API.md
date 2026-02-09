@@ -1,39 +1,53 @@
-# Documentacao da API (TCC Quantum Search)
+# API Documentation - Quantum Search (TCC)
 
-Esta documentacao descreve todos os endpoints, formatos de request/response e instrucoes de uso para integrar o frontend.
+Esta documentacao descreve todos os endpoints, formatos de request/response e o passo a passo para uso.
 
-## Visao Geral
+## Visao geral
 - Base URL (local): `http://localhost:8000`
 - Servidor: FastAPI
-- Autenticacao: Bearer JWT
+- Autenticacao: Bearer JWT (somente rotas de conversas e mensagens)
 - CORS: liberado para todas as origens
 
 ## Como rodar o backend
 1. Copie `.env.example` para `.env` e ajuste se necessario.
-1. Suba os servicos:
+2. Suba os servicos:
 ```
 docker compose build
 docker compose up -d
 ```
-1. API disponivel em `http://localhost:8000`.
+3. API disponivel em `http://localhost:8000`.
+
+## Passo a passo (API)
+1. Crie um usuario com `POST /auth/register`.
+2. Faca login com `POST /auth/login` e guarde o `access_token`.
+3. Use `Authorization: Bearer <access_token>` nas rotas de conversas.
+4. Para buscar:
+   - Use `POST /search/file` para PDF/TXT (com `mode=compare` para comparar).
+   - Use `POST /search` para enviar textos em JSON.
+   - Use `POST /search/dataset` para consultas em datasets publicos.
 
 ## Autenticacao
 Fluxo:
 1. `POST /auth/register` para criar usuario.
-1. `POST /auth/login` para obter `access_token`.
-1. Usar o token no header:
+2. `POST /auth/login` para obter `access_token`.
+3. Usar o token no header:
 ```
 Authorization: Bearer <access_token>
 ```
 
 O token expira em `ACCESS_TOKEN_EXPIRE_MINUTES` (padrao 1440 minutos).
 
+## Parametros comuns de busca
+- `mode`: `classical`, `quantum`, `compare`
+- `top_k`: numero de resultados finais (padrao 5)
+- `candidate_k`: numero de candidatos para reranking (padrao 20)
+
 ## Endpoints
 
 ### Health Check
 **GET** `/health`
 - Auth: nao
-- Response:
+- Response 200:
 ```json
 { "status": "ok" }
 ```
@@ -49,7 +63,7 @@ O token expira em `ACCESS_TOKEN_EXPIRE_MINUTES` (padrao 1440 minutos).
   "password": "senha"
 }
 ```
-- Response 201 (JSON):
+- Response 201:
 ```json
 {
   "id": 1,
@@ -59,6 +73,7 @@ O token expira em `ACCESS_TOKEN_EXPIRE_MINUTES` (padrao 1440 minutos).
 ```
 - Erros:
   - 400: `Email already registered`
+  - 400: `Password too long (max 72 bytes)`
 
 #### Login
 **POST** `/auth/login`
@@ -68,7 +83,7 @@ O token expira em `ACCESS_TOKEN_EXPIRE_MINUTES` (padrao 1440 minutos).
 ```
 username=<email>&password=<senha>
 ```
-- Response 200 (JSON):
+- Response 200:
 ```json
 {
   "access_token": "<jwt>",
@@ -81,7 +96,7 @@ username=<email>&password=<senha>
 #### Usuario logado
 **GET** `/auth/me`
 - Auth: Bearer JWT
-- Response 200 (JSON):
+- Response 200:
 ```json
 {
   "id": 1,
@@ -109,18 +124,13 @@ username=<email>&password=<senha>
   "candidate_k": 20
 }
 ```
-- `mode` pode ser: `classical`, `quantum`, `compare`
-- Response 200 (JSON):
+- Response 200:
 ```json
 {
   "query": "texto da pergunta",
   "mode": "classical",
   "results": [
-    {
-      "doc_id": "doc-1",
-      "text": "documento 1",
-      "score": 0.87
-    }
+    { "doc_id": "doc-1", "text": "documento 1", "score": 0.87 }
   ],
   "metrics": {
     "recall_at_k": null,
@@ -139,39 +149,33 @@ username=<email>&password=<senha>
 - Auth: nao
 - Content-Type: `multipart/form-data`
 - Body (form-data):
-  - `query` (string)
-  - `file` (UploadFile: PDF ou TXT)
-  - `mode` (opcional)
-  - `top_k` (opcional)
-  - `candidate_k` (opcional)
-- Response 200 (JSON):
+  - `query` (string, opcional; se vazio, usa "Resumo do documento")
+  - `file` (UploadFile: PDF ou TXT, obrigatorio)
+  - `mode` (opcional; padrao `classical`)
+  - `top_k` (opcional; padrao 5)
+  - `candidate_k` (opcional; padrao 20)
+- Response 200:
 ```json
 {
   "query": "texto da pergunta",
   "mode": "compare",
   "results": [
-    {
-      "doc_id": "doc-1",
-      "text": "trecho do documento",
-      "score": 0.91
-    }
+    { "doc_id": "doc-1", "text": "trecho do documento", "score": 0.91 }
   ],
   "comparison": {
     "classical": {
-      "results": [
-        {"doc_id": "doc-1", "text": "trecho", "score": 0.91}
-      ],
-      "metrics": {"latency_ms": 10.2, "k": 5, "candidate_k": 20, "has_labels": false}
+      "results": [{ "doc_id": "doc-1", "text": "trecho", "score": 0.91 }],
+      "metrics": { "latency_ms": 10.2, "k": 5, "candidate_k": 20, "has_labels": false }
     },
     "quantum": {
-      "results": [
-        {"doc_id": "doc-1", "text": "trecho", "score": 0.88}
-      ],
-      "metrics": {"latency_ms": 18.6, "k": 5, "candidate_k": 20, "has_labels": false}
+      "results": [{ "doc_id": "doc-1", "text": "trecho", "score": 0.88 }],
+      "metrics": { "latency_ms": 18.6, "k": 5, "candidate_k": 20, "has_labels": false }
     }
   }
 }
 ```
+- Erros:
+  - 400: `Arquivo nao enviado`
 
 #### Busca em dataset publico
 **POST** `/search/dataset`
@@ -186,13 +190,16 @@ username=<email>&password=<senha>
   "candidate_k": 20
 }
 ```
-- Response 200 (JSON) inclui `metrics` com rotulos de relevancia quando disponiveis.
+- Response 200 inclui `metrics` com rotulos de relevancia quando disponiveis.
+- Erros:
+  - 404: `Dataset nao encontrado`
+  - 404: `Query nao encontrada`
 
 ### Datasets
 #### Listar datasets
 **GET** `/datasets`
 - Auth: nao
-- Response 200 (JSON):
+- Response 200:
 ```json
 [
   {
@@ -208,17 +215,19 @@ username=<email>&password=<senha>
 #### Detalhar dataset
 **GET** `/datasets/{dataset_id}`
 - Auth: nao
-- Response 200 (JSON):
+- Response 200:
 ```json
 {
   "dataset_id": "mini-rag",
   "name": "Mini RAG/Quantum",
   "description": "Conjunto reduzido para avaliacao",
   "queries": [
-    {"query_id": "q1", "query": "Como o RAG usa busca semantica?", "relevant_count": 2}
+    { "query_id": "q1", "query": "Como o RAG usa busca semantica?", "relevant_count": 2 }
   ]
 }
 ```
+- Erros:
+  - 404: `Dataset nao encontrado`
 
 ### Conversas (chat)
 Todas as rotas abaixo exigem Bearer JWT.
@@ -228,51 +237,59 @@ Todas as rotas abaixo exigem Bearer JWT.
 - Auth: Bearer JWT
 - Body (JSON):
 ```json
-{
-  "title": "Minha conversa"
-}
+{ "title": "Minha conversa" }
 ```
-- Response 201 (JSON):
+- Response 201:
 ```json
-{
-  "id": 10,
-  "title": "Minha conversa",
-  "created_at": "2026-02-05T12:00:00Z"
-}
+{ "id": 10, "title": "Minha conversa", "created_at": "2026-02-05T12:00:00Z" }
 ```
 
 #### Listar conversas do usuario
 **GET** `/conversations`
 - Auth: Bearer JWT
-- Response 200 (JSON):
+- Response 200:
 ```json
 [
-  {
-    "id": 10,
-    "title": "Minha conversa",
-    "created_at": "2026-02-05T12:00:00Z"
-  }
+  { "id": 10, "title": "Minha conversa", "created_at": "2026-02-05T12:00:00Z" }
 ]
 ```
 
 #### Detalhar conversa
 **GET** `/conversations/{conversation_id}`
 - Auth: Bearer JWT
-- Response 200 (JSON):
+- Response 200:
 ```json
 {
   "id": 10,
   "title": "Minha conversa",
   "created_at": "2026-02-05T12:00:00Z",
   "messages": [
-    {
-      "id": 100,
-      "role": "user",
-      "content": "Oi",
-      "created_at": "2026-02-05T12:05:00Z"
-    }
+    { "id": 100, "role": "user", "content": "Oi", "created_at": "2026-02-05T12:05:00Z" }
   ]
 }
 ```
+- Erros:
+  - 404: `Conversation not found`
+
+#### Adicionar mensagem
+**POST** `/conversations/{conversation_id}/messages`
+- Auth: Bearer JWT
+- Body (JSON):
+```json
+{ "role": "user", "content": "Oi" }
+```
+- Roles permitidos: `user`, `assistant`, `system`
+- Response 201:
+```json
+{ "id": 101, "role": "user", "content": "Oi", "created_at": "2026-02-05T12:06:00Z" }
+```
+- Erros:
+  - 400: `Invalid role`
+  - 404: `Conversation not found`
+
+#### Remover conversa
+**DELETE** `/conversations/{conversation_id}`
+- Auth: Bearer JWT
+- Response 204 (sem corpo)
 - Erros:
   - 404: `Conversation not found`
