@@ -84,6 +84,12 @@ def test_swap_test_similarity_orthogonal_vectors():
     assert similarity == pytest.approx(0.0, abs=1e-6)
 
 
+def test_swap_test_rejects_zero_vector():
+    comparator = SwapTestQuantumComparator()
+    with pytest.raises(ValueError, match="Vector norm is zero"):
+        comparator.compare([0.0, 0.0], [1.0, 0.0])
+
+
 def test_swap_test_large_vectors_runs_and_returns_valid_score():
     comparator = SwapTestQuantumComparator()
     vector_a = list(range(1, 35))
