@@ -1,4 +1,7 @@
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+import time
+from collections import defaultdict, deque
+
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 from application.dtos import DocumentDTO, SearchFileRequestDTO, SearchRequestDTO
 from application.services import SearchService
@@ -16,6 +19,11 @@ from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumCo
 
 router = APIRouter(prefix="/search", tags=["search"])
 
+MAX_UPLOAD_BYTES = 5 * 1024 * 1024
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 10
+_RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
+
 
 def _build_service() -> SearchService:
     embedder = LocalEmbedder()
@@ -24,6 +32,27 @@ def _build_service() -> SearchService:
     buscar_use_case = RealizarBuscaUseCase(embedder, classical, quantum)
     buscar_por_arquivo_use_case = BuscarPorArquivoUseCase(PdfTxtDocumentTextExtractor())
     return SearchService(buscar_use_case, buscar_por_arquivo_use_case)
+
+
+def _enforce_rate_limit(request: Request) -> None:
+    client_host = request.client.host if request.client else "unknown"
+    key = f"{client_host}:search"
+    now = time.time()
+    bucket = _RATE_LIMIT_BUCKETS[key]
+    while bucket and now - bucket[0] > RATE_LIMIT_WINDOW_SECONDS:
+        bucket.popleft()
+    if len(bucket) >= RATE_LIMIT_MAX_REQUESTS:
+        raise HTTPException(status_code=429, detail="Muitas requisicoes, tente novamente")
+    bucket.append(now)
+
+
+def _read_upload(file: UploadFile) -> bytes:
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Arquivo excede o limite de tamanho")
+    if not content:
+        raise HTTPException(status_code=400, detail="Arquivo vazio")
+    return content
 
 
 def _to_response_schema(response) -> SearchResponseSchema:
@@ -73,7 +102,8 @@ def _metrics_to_schema(metrics):
 
 
 @router.post("", response_model=SearchResponseSchema)
-def search(payload: SearchRequestSchema) -> SearchResponseSchema:
+def search(payload: SearchRequestSchema, request: Request) -> SearchResponseSchema:
+    _enforce_rate_limit(request)
     docs = [DocumentDTO(doc_id=f"doc-{i+1}", text=text) for i, text in enumerate(payload.documents)]
     service = _build_service()
     dto = SearchRequestDTO(query=payload.query, documents=docs)
@@ -97,6 +127,7 @@ def search(payload: SearchRequestSchema) -> SearchResponseSchema:
 
 @router.post("/file", response_model=SearchResponseSchema)
 def search_file(
+    request: Request,
     query: str = Form(""),
     file: UploadFile | None = File(None),
     mode: str = Form("classical"),
@@ -105,9 +136,10 @@ def search_file(
 ) -> SearchResponseSchema:
     if file is None:
         raise HTTPException(status_code=400, detail="Arquivo nao enviado")
+    _enforce_rate_limit(request)
     if not query or not query.strip():
         query = "Resumo do documento"
-    content = file.file.read()
+    content = _read_upload(file)
     service = _build_service()
     dto = SearchFileRequestDTO(query=query, filename=file.filename or "", content=content)
 
@@ -125,7 +157,8 @@ def search_file(
 
 
 @router.post("/dataset", response_model=SearchResponseSchema)
-def search_dataset(payload: DatasetSearchRequestSchema) -> SearchResponseSchema:
+def search_dataset(payload: DatasetSearchRequestSchema, request: Request) -> SearchResponseSchema:
+    _enforce_rate_limit(request)
     repository = PublicDatasetRepository()
     dataset = repository.get_dataset(payload.dataset_id)
     if not dataset:

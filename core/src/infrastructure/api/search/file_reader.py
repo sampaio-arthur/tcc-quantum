@@ -2,6 +2,7 @@
 
 from fastapi import HTTPException
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 from application.interfaces import DocumentTextExtractor
 
@@ -24,6 +25,16 @@ class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
 
     @staticmethod
     def _read_pdf(content: bytes) -> str:
-        reader = PdfReader(io.BytesIO(content))
+        if not content:
+            raise HTTPException(status_code=400, detail="Arquivo PDF vazio")
+        if not content.startswith(b"%PDF"):
+            raise HTTPException(status_code=400, detail="PDF invalido")
+        try:
+            reader = PdfReader(io.BytesIO(content))
+        except PdfReadError as exc:
+            raise HTTPException(status_code=400, detail="PDF invalido") from exc
         pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n".join(pages).strip()
+        text = "\n".join(pages).strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="PDF sem texto extraivel")
+        return text

@@ -7,6 +7,8 @@ from application.interfaces import QuantumComparator
 
 
 def _next_power_of_two(value: int) -> int:
+    if value <= 0:
+        raise ValueError("Value must be positive")
     power = 1
     while power < value:
         power *= 2
@@ -14,6 +16,10 @@ def _next_power_of_two(value: int) -> int:
 
 
 def _pad_and_normalize(vector: np.ndarray, target_len: int) -> np.ndarray:
+    if target_len <= 0:
+        raise ValueError("Target length must be positive")
+    if vector.size == 0:
+        raise ValueError("Vector must be non-empty")
     if vector.size > target_len:
         raise ValueError("Target length smaller than vector length")
     if vector.size < target_len:
