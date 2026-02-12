@@ -206,7 +206,7 @@ username=<email>&password=<senha>
     "dataset_id": "mini-rag",
     "name": "Mini RAG/Quantum",
     "description": "Conjunto reduzido para avaliacao",
-    "document_count": 6,
+    "document_count": 5,
     "query_count": 5
   }
 ]

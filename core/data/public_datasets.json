@@ -21,11 +21,6 @@
           "text": "Grover e um algoritmo quantico de busca que amplifica a amplitude de estados marcados, reduzindo o numero esperado de iteracoes em relacao a busca classica."
         },
         {
-          "doc_id": "doc-4",
-          "title": "FAISS e indexacao vetorial",
-          "text": "FAISS e uma biblioteca para busca vetorial eficiente. Ela usa estruturas de indice para reduzir a latencia em colecoes grandes de embeddings."
-        },
-        {
           "doc_id": "doc-5",
           "title": "GenAI e modelos de linguagem",
           "text": "Modelos de linguagem generativos podem sintetizar respostas, mas precisam de contexto confiavel. O uso de RAG melhora a factualidade das respostas."
@@ -59,8 +54,8 @@
         },
         {
           "query_id": "q5",
-          "query": "Como FAISS acelera a busca vetorial?",
-          "relevant_doc_ids": ["doc-4"]
+          "query": "Como embeddings ajudam na busca semantica?",
+          "relevant_doc_ids": ["doc-1"]
         }
       ]
     }
