@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from application.dtos import DocumentDTO, SearchFileRequestDTO, SearchRequestDTO
@@ -15,6 +17,10 @@ from infrastructure.embeddings import LocalEmbedder
 from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumComparator
 
 router = APIRouter(prefix="/search", tags=["search"])
+
+MAX_UPLOAD_BYTES = int(os.getenv("UPLOAD_MAX_BYTES", "5242880"))
+ALLOWED_PDF_TYPES = {"application/pdf", "application/x-pdf"}
+ALLOWED_TXT_TYPES = {"text/plain"}
 
 
 def _build_service() -> SearchService:
@@ -107,13 +113,25 @@ def search_file(
         raise HTTPException(status_code=400, detail="Arquivo nao enviado")
     if not file.filename:
         raise HTTPException(status_code=400, detail="Nome do arquivo invalido")
+    filename = file.filename
+    filename_lower = filename.lower()
+    if filename_lower.endswith(".pdf"):
+        if file.content_type and file.content_type not in ALLOWED_PDF_TYPES:
+            raise HTTPException(status_code=400, detail="Tipo de arquivo PDF invalido")
+    elif filename_lower.endswith(".txt"):
+        if file.content_type and file.content_type not in ALLOWED_TXT_TYPES:
+            raise HTTPException(status_code=400, detail="Tipo de arquivo TXT invalido")
+    else:
+        raise HTTPException(status_code=400, detail="Unsupported file type. Use .txt or .pdf")
     if not query or not query.strip():
         query = "Resumo do documento"
-    content = file.file.read()
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Arquivo excede o tamanho maximo")
     if not content:
         raise HTTPException(status_code=400, detail="Arquivo vazio ou invalido")
     service = _build_service()
-    dto = SearchFileRequestDTO(query=query, filename=file.filename or "", content=content)
+    dto = SearchFileRequestDTO(query=query, filename=filename, content=content)
 
     if mode == "compare":
         response = service.comparar_por_arquivo(dto, top_k=top_k, candidate_k=candidate_k)

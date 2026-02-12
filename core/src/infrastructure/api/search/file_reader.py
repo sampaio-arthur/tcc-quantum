@@ -26,6 +26,8 @@ class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
 
     @staticmethod
     def _read_pdf(content: bytes) -> str:
+        if not content.startswith(b"%PDF-"):
+            raise HTTPException(status_code=400, detail="Arquivo nao e um PDF valido")
         try:
             reader = PdfReader(io.BytesIO(content))
             pages = [page.extract_text() or "" for page in reader.pages]

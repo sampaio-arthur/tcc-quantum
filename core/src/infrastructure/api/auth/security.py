@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from infrastructure.persistence.database import get_db
 from infrastructure.persistence.models import User
 
+APP_ENV = os.getenv('APP_ENV', 'development')
 SECRET_KEY = os.getenv('JWT_SECRET', 'change-this-secret')
 ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES', '1440'))
@@ -27,7 +28,13 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
+def _ensure_secret_key() -> None:
+    if APP_ENV.lower() != 'development' and SECRET_KEY == 'change-this-secret':
+        raise RuntimeError('JWT_SECRET must be set in non-development environments')
+
+
 def create_access_token(subject: str, expires_delta: Optional[timedelta] = None) -> str:
+    _ensure_secret_key()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode = {'sub': subject, 'exp': expire}
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -47,6 +54,7 @@ def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    _ensure_secret_key()
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail='Could not validate credentials',

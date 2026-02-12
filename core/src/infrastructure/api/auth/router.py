@@ -3,7 +3,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from infrastructure.api.auth.schemas import Token, UserCreate, UserOut
-from infrastructure.api.auth.security import authenticate_user, create_access_token, get_password_hash
+from infrastructure.api.auth.security import (
+    authenticate_user,
+    create_access_token,
+    get_password_hash,
+    verify_password,
+)
 from infrastructure.api.auth.security import get_current_user
 from infrastructure.persistence.database import get_db
 from infrastructure.persistence.models import User
@@ -20,7 +25,11 @@ def register(payload: UserCreate, db: Session = Depends(get_db)) -> UserOut:
     if len(payload.password.encode('utf-8')) > 72:
         raise HTTPException(status_code=400, detail='Password too long (max 72 bytes)')
 
-    user = User(email=payload.email, password_hash=get_password_hash(payload.password))
+    password_hash = get_password_hash(payload.password)
+    if not verify_password(payload.password, password_hash):
+        raise HTTPException(status_code=500, detail='Password hashing failed')
+
+    user = User(email=payload.email, password_hash=password_hash)
     db.add(user)
     db.commit()
     db.refresh(user)
