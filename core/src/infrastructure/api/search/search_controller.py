@@ -105,9 +105,13 @@ def search_file(
 ) -> SearchResponseSchema:
     if file is None:
         raise HTTPException(status_code=400, detail="Arquivo nao enviado")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Nome do arquivo invalido")
     if not query or not query.strip():
         query = "Resumo do documento"
     content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Arquivo vazio ou invalido")
     service = _build_service()
     dto = SearchFileRequestDTO(query=query, filename=file.filename or "", content=content)
 

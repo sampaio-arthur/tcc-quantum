@@ -7,6 +7,10 @@ from application.interfaces import QuantumComparator
 
 
 def _next_power_of_two(value: int) -> int:
+    if not isinstance(value, int):
+        raise TypeError("Value must be an integer")
+    if value < 1:
+        raise ValueError("Value must be a positive integer")
     power = 1
     while power < value:
         power *= 2
@@ -14,6 +18,14 @@ def _next_power_of_two(value: int) -> int:
 
 
 def _pad_and_normalize(vector: np.ndarray, target_len: int) -> np.ndarray:
+    if vector is None:
+        raise ValueError("Vector is required")
+    if not isinstance(target_len, int):
+        raise TypeError("Target length must be an integer")
+    if target_len < 1:
+        raise ValueError("Target length must be positive")
+    if vector.size == 0:
+        raise ValueError("Vector must be non-empty")
     if vector.size > target_len:
         raise ValueError("Target length smaller than vector length")
     if vector.size < target_len:

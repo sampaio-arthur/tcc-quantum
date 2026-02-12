@@ -8,6 +8,8 @@ from application.interfaces import DocumentTextExtractor
 
 class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
     def extract(self, filename: str, content: bytes) -> str:
+        if not content:
+            raise HTTPException(status_code=400, detail="Arquivo vazio ou invalido")
         name = (filename or "").lower()
         if name.endswith(".txt"):
             return self._read_txt(content)
@@ -24,6 +26,12 @@ class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
 
     @staticmethod
     def _read_pdf(content: bytes) -> str:
-        reader = PdfReader(io.BytesIO(content))
-        pages = [page.extract_text() or "" for page in reader.pages]
-        return "\n".join(pages).strip()
+        try:
+            reader = PdfReader(io.BytesIO(content))
+            pages = [page.extract_text() or "" for page in reader.pages]
+            text = "\n".join(pages).strip()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail="PDF invalido") from exc
+        if not text:
+            raise HTTPException(status_code=400, detail="PDF sem texto extraivel")
+        return text
