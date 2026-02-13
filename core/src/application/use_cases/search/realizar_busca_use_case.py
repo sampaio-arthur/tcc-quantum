@@ -2,9 +2,9 @@ from dataclasses import dataclass
 import re
 from typing import Iterable, List
 
-from application.dtos import DocumentDTO
+from application.dtos import DocumentDTO, SearchResponseDTO
 from application.interfaces import Embedder, QuantumComparator
-from application.mappers.search import document_dto_to_entity
+from application.mappers.search import document_dto_to_entity, results_to_dtos
 from domain.entities import Document
 
 
@@ -30,11 +30,29 @@ class RealizarBuscaUseCase:
         self,
         embedder: Embedder,
         classical_comparator: QuantumComparator,
-        quantum_comparator: QuantumComparator,
+        quantum_comparator: QuantumComparator | None = None,
     ) -> None:
         self._embedder = embedder
         self._classical_comparator = classical_comparator
-        self._quantum_comparator = quantum_comparator
+        self._quantum_comparator = quantum_comparator or classical_comparator
+
+    def execute(
+        self,
+        query: str,
+        documents: Iterable[DocumentDTO],
+        mode: str = "classical",
+        top_k: int = 5,
+        candidate_k: int = 20,
+    ) -> SearchResponseDTO:
+        results = self.score(query, documents, mode=mode, candidate_k=candidate_k)
+        limited_results = list(results)[:top_k]
+        answer = self.build_answer(query, limited_results)
+        return SearchResponseDTO(
+            query=query,
+            mode=mode,
+            results=results_to_dtos(limited_results),
+            answer=answer,
+        )
 
     def score(
         self,
@@ -96,7 +114,10 @@ class RealizarBuscaUseCase:
                 break
 
         if not candidates:
-            return None
+            top_text = _normalize_text(results[0].document.text)
+            if not top_text:
+                return None
+            return "Com base no documento, " + top_text
 
         query_vector = self._embedder.embed_texts([query])[0]
         sentence_vectors = self._embedder.embed_texts(candidates)
