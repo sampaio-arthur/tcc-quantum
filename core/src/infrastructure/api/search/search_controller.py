@@ -14,7 +14,7 @@ from infrastructure.api.search.schemas import (
     SearchResponseLite as SearchResponseLiteSchema,
 )
 from infrastructure.datasets import PublicDatasetRepository
-from infrastructure.embeddings import LocalEmbedder
+from infrastructure.embeddings import build_embedder_from_env
 from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumComparator
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -26,7 +26,7 @@ _RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
 
 def _build_service() -> SearchService:
-    embedder = LocalEmbedder()
+    embedder = build_embedder_from_env()
     classical = CosineSimilarityComparator()
     quantum = SwapTestQuantumComparator()
     buscar_use_case = RealizarBuscaUseCase(embedder, classical, quantum)

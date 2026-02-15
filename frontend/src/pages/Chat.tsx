@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { api, Conversation, Message, SearchResponse } from '@/lib/api';
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
-  
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -134,13 +134,13 @@ export default function Chat() {
         const newConversation = await api.createConversation(filename);
         conversationId = newConversation.id;
         setActiveConversationId(conversationId);
-        setConversations(prev => [newConversation, ...prev]);
+        setConversations((prev) => [newConversation, ...prev]);
       }
 
       const userMessage = await api.addMessage(conversationId, 'user', filename);
-      setMessages(prev => [...prev, userMessage]);
+      setMessages((prev) => [...prev, userMessage]);
 
-      const searchResponse = await api.searchWithFile(filename, file, { mode: 'compare' });
+      const searchResponse = await api.searchWithFile(filename, file);
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -151,16 +151,17 @@ export default function Chat() {
 
       if (assistantContent.length > 0) {
         const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages((prev) => [...prev, assistantMessage]);
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prev => [
+      const detail = error instanceof Error ? error.message : 'Erro desconhecido';
+      setMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
           role: 'assistant',
-          content: 'Desculpe, ocorreu um erro ao processar sua mensagem. Por favor, tente novamente.',
+          content: `Desculpe, ocorreu um erro ao processar sua mensagem: ${detail}`,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -228,10 +229,7 @@ export default function Chat() {
 
         {/* Input */}
         <div className="pb-6 pt-2">
-          <ChatInput
-            onSendMessage={handleSendMessage}
-            isLoading={isLoading}
-          />
+          <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
       </main>
     </div>

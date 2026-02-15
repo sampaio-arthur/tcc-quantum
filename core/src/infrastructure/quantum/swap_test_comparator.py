@@ -1,4 +1,4 @@
-﻿from typing import Sequence
+from typing import Sequence
 
 import numpy as np
 import pennylane as qml
@@ -30,13 +30,28 @@ def _pad_and_normalize(vector: np.ndarray, target_len: int) -> np.ndarray:
     return vector / norm
 
 
+def _cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
+    norm_a = np.linalg.norm(vec_a)
+    norm_b = np.linalg.norm(vec_b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0
+    score = float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
+    return float(np.clip(score, 0.0, 1.0))
+
+
 class SwapTestQuantumComparator(QuantumComparator):
+    # Keep simulation tractable. 64 dims => 6 qubits per register (+1 ancilla).
+    MAX_QUANTUM_VECTOR_LEN = 64
+
     def compare(self, vector_a: Sequence[float], vector_b: Sequence[float]) -> float:
         vec_a = np.array(vector_a, dtype=float)
         vec_b = np.array(vector_b, dtype=float)
 
         if vec_a.size == 0 or vec_b.size == 0:
             raise ValueError("Vectors must be non-empty")
+
+        if max(vec_a.size, vec_b.size) > self.MAX_QUANTUM_VECTOR_LEN:
+            return _cosine_similarity(vec_a, vec_b)
 
         target_len = _next_power_of_two(max(vec_a.size, vec_b.size))
         vec_a = _pad_and_normalize(vec_a, target_len)

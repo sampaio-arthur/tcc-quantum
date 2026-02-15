@@ -1,4 +1,5 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000';
+const REQUEST_TIMEOUT_MS = 60000;
 
 export interface User {
   id: number;
@@ -72,16 +73,44 @@ class ApiClient {
   private getHeaders(json = true): HeadersInit {
     const headers: HeadersInit = {};
     const token = this.getToken();
-    
+
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    
+
     if (json) {
       headers['Content-Type'] = 'application/json';
     }
-    
+
     return headers;
+  }
+
+  private async fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        throw new Error('Tempo limite excedido ao aguardar resposta do servidor');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  private async readErrorDetail(response: Response, fallback: string): Promise<string> {
+    try {
+      const data = await response.json();
+      if (typeof data?.detail === 'string' && data.detail.trim()) {
+        return data.detail;
+      }
+    } catch {
+      // ignore json parsing errors and fallback
+    }
+    return fallback;
   }
 
   async register(email: string, password: string): Promise<User> {
@@ -114,7 +143,7 @@ class ApiClient {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Credenciais inválidas');
+      throw new Error(error.detail || 'Credenciais invalidas');
     }
 
     const data = await response.json();
@@ -128,7 +157,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Não autenticado');
+      throw new Error('Nao autenticado');
     }
 
     return response.json();
@@ -181,7 +210,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Conversa não encontrada');
+      throw new Error('Conversa nao encontrada');
     }
 
     return response.json();
@@ -207,7 +236,7 @@ class ApiClient {
     formData.append('file', file);
     formData.append('mode', 'compare');
 
-    const response = await fetch(`${API_BASE_URL}/search/file`, {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/file`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.getToken()}`,
@@ -216,7 +245,8 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error('Erro na busca');
+      const detail = await this.readErrorDetail(response, 'Erro na busca');
+      throw new Error(detail);
     }
 
     return response.json();

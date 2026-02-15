@@ -2,7 +2,7 @@ from application.dtos import DocumentDTO, SearchRequestDTO
 from application.services import SearchService
 from application.use_cases import BuscarPorArquivoUseCase, RealizarBuscaUseCase
 from infrastructure.api.search.file_reader import PdfTxtDocumentTextExtractor
-from infrastructure.embeddings import LocalEmbedder
+from infrastructure.embeddings import build_embedder_from_env
 from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumComparator
 
 
@@ -14,7 +14,7 @@ def main() -> None:
         DocumentDTO(doc_id="doc-3", text="Sistemas Embarcados"),
     ]
 
-    embedder = LocalEmbedder()
+    embedder = build_embedder_from_env()
     classical = CosineSimilarityComparator()
     quantum = SwapTestQuantumComparator()
     buscar_use_case = RealizarBuscaUseCase(embedder, classical, quantum)
