@@ -1,7 +1,8 @@
 import time
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from sqlalchemy.orm import Session
 
 from application.dtos import DocumentDTO, SearchFileRequestDTO, SearchRequestDTO
 from application.services import SearchService
@@ -15,6 +16,8 @@ from infrastructure.api.search.schemas import (
 )
 from infrastructure.datasets import PublicDatasetRepository
 from infrastructure.embeddings import build_embedder_from_env
+from infrastructure.persistence.database import get_db
+from infrastructure.persistence.search_trace_repository import SearchTraceRepository
 from infrastructure.quantum import CosineSimilarityComparator, SwapTestQuantumComparator
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -25,13 +28,14 @@ RATE_LIMIT_MAX_REQUESTS = 10
 _RATE_LIMIT_BUCKETS: dict[str, deque[float]] = defaultdict(deque)
 
 
-def _build_service() -> SearchService:
+def _build_service(db: Session) -> SearchService:
     embedder = build_embedder_from_env()
     classical = CosineSimilarityComparator()
     quantum = SwapTestQuantumComparator()
     buscar_use_case = RealizarBuscaUseCase(embedder, classical, quantum)
     buscar_por_arquivo_use_case = BuscarPorArquivoUseCase(PdfTxtDocumentTextExtractor())
-    return SearchService(buscar_use_case, buscar_por_arquivo_use_case)
+    trace_repository = SearchTraceRepository(db)
+    return SearchService(buscar_use_case, buscar_por_arquivo_use_case, trace_repository)
 
 
 def _enforce_rate_limit(request: Request) -> None:
@@ -100,12 +104,15 @@ def _metrics_to_schema(metrics):
         "has_labels": metrics.has_labels,
     }
 
-
 @router.post("", response_model=SearchResponseSchema)
-def search(payload: SearchRequestSchema, request: Request) -> SearchResponseSchema:
+def search(
+    payload: SearchRequestSchema,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SearchResponseSchema:
     _enforce_rate_limit(request)
     docs = [DocumentDTO(doc_id=f"doc-{i+1}", text=text) for i, text in enumerate(payload.documents)]
-    service = _build_service()
+    service = _build_service(db)
     dto = SearchRequestDTO(query=payload.query, documents=docs)
 
     if payload.mode == "compare":
@@ -133,6 +140,7 @@ def search_file(
     mode: str = Form("classical"),
     top_k: int = Form(5),
     candidate_k: int = Form(20),
+    db: Session = Depends(get_db),
 ) -> SearchResponseSchema:
     if file is None:
         raise HTTPException(status_code=400, detail="Arquivo nao enviado")
@@ -140,7 +148,7 @@ def search_file(
     if not query or not query.strip():
         query = "Resumo do documento"
     content = _read_upload(file)
-    service = _build_service()
+    service = _build_service(db)
     dto = SearchFileRequestDTO(query=query, filename=file.filename or "", content=content)
 
     if mode == "compare":
@@ -157,7 +165,11 @@ def search_file(
 
 
 @router.post("/dataset", response_model=SearchResponseSchema)
-def search_dataset(payload: DatasetSearchRequestSchema, request: Request) -> SearchResponseSchema:
+def search_dataset(
+    payload: DatasetSearchRequestSchema,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> SearchResponseSchema:
     _enforce_rate_limit(request)
     repository = PublicDatasetRepository()
     dataset = repository.get_dataset(payload.dataset_id)
@@ -175,7 +187,7 @@ def search_dataset(payload: DatasetSearchRequestSchema, request: Request) -> Sea
     dto = SearchRequestDTO(query=query_info["query"], documents=docs)
 
     relevant_doc_ids = query_info.get("relevant_doc_ids", [])
-    service = _build_service()
+    service = _build_service(db)
 
     if payload.mode == "compare":
         response = service.comparar_por_texto(
@@ -194,5 +206,3 @@ def search_dataset(payload: DatasetSearchRequestSchema, request: Request) -> Sea
         )
 
     return _to_response_schema(response)
-
-

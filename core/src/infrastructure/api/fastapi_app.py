@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from infrastructure.api.auth import router as auth_router
-from infrastructure.api.search.search_controller import router as search_router
+from infrastructure.api.search.search_controller_pg import router as search_router
 from infrastructure.api.chat import router as chat_router
 from infrastructure.api.datasets import router as datasets_router
 from infrastructure.persistence.database import init_db
@@ -32,3 +32,4 @@ def on_startup() -> None:
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+

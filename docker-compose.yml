@@ -28,18 +28,17 @@ services:
       - core
 
   db:
-    image: mysql:8.0
-    container_name: quantum_search_mysql
+    image: pgvector/pgvector:pg16
+    container_name: quantum_search_postgres
     restart: unless-stopped
     environment:
-      - MYSQL_DATABASE=tcc
-      - MYSQL_USER=tcc
-      - MYSQL_PASSWORD=tcc
-      - MYSQL_ROOT_PASSWORD=tccroot
+      - POSTGRES_DB=tcc
+      - POSTGRES_USER=tcc
+      - POSTGRES_PASSWORD=tcc
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - pg_data:/var/lib/postgresql/data
 
 volumes:
-  mysql_data:
+  pg_data:

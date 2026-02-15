@@ -1,45 +1,53 @@
 # Quantum Search (TCC)
 
-Plataforma academica para comparar busca semantica classica com uma abordagem quantico-inspirada (swap test via PennyLane) aplicada a RAG simples. O foco e comparar ranking e latencia entre os modos.
+Plataforma academica para comparar busca semantica classica com abordagem quantico-inspirada (swap test com PennyLane), aplicada a um fluxo RAG simples.
 
-## Funcao principal do app
-- Receber um PDF/TXT (ou usar dataset publico via API), extrair texto e dividir em chunks.
-- Gerar embeddings e buscar trechos relevantes.
-- Executar modo classico (cosine similarity) e/ou modo quantico (prefiltro classico + reranking por swap test).
-- Exibir resultados, pipeline e comparacao de metricas quando houver rotulos de relevancia.
+## Resumo
+- Upload de PDF/TXT ou uso de dataset publico.
+- Embeddings gerados por API externa (Gemini), sem modelo local.
+- Comparacao de ranking: classico (cosine) vs quantico-inspirado.
+- Persistencia de historico (auth/chat) e de rastros de busca (embeddings + estados quanticos) em PostgreSQL com pgvector.
 
-## O que ele compara, para que e como
-- Compara dois metodos de ranking: classico vs quantico-inspirado.
-- Objetivo: medir qualidade de recuperacao (Recall@K, MRR, NDCG@K quando disponivel) e latencia (ms).
-- Como: o modo quantico usa o ranking classico para selecionar candidatos e reordena com swap test; o modo comparar executa ambos e mostra os resultados lado a lado.
+## Pipeline atual
+1. Ingestao: extrai texto de PDF/TXT e divide em chunks.
+2. Embeddings: gera vetores por API Gemini (`EMBEDDER_PROVIDER=gemini`).
+3. Ranking classico: cosine similarity.
+4. Ranking quantico: reranking (swap test) sobre candidatos prefiltrados.
+5. Modo `compare`: executa classico e quantico com o mesmo conjunto de embeddings para comparacao fiel.
+6. Persistencia de busca: salva run, embeddings e rastros quanticos no banco.
 
-## Como usar (passo a passo na interface)
-1. Suba o backend e o frontend (ver passos abaixo).
-2. Abra o frontend no navegador e faca login/cadastro.
-3. Crie ou selecione uma conversa.
-4. Anexe um arquivo PDF/TXT e clique em enviar.
-5. Veja os resultados, a pipeline e o painel de comparacao.
-6. Use o historico para voltar a conversas anteriores.
+## Persistencia (PostgreSQL + pgvector)
+Tabelas principais:
+- `users`, `conversations`, `messages`
+- `search_runs`
+- `search_vector_records`
 
-## Como rodar localmente
-### Backend
-1. Copie `.env.example` para `.env` e ajuste se necessario.
-2. Suba os servicos:
-```
-docker compose build
-docker compose up -d
-```
-3. API disponivel em `http://localhost:8000`.
+Registros de `search_vector_records` incluem:
+- `query_embedding`
+- `document_embedding`
+- `quantum_query_state`
+- `quantum_doc_state`
 
-### Frontend
-1. Instale dependencias:
+## Como rodar
+1. Crie o arquivo `.env` a partir do `.env.example`.
+2. Preencha o `.env` com os valores reais (segredos, URLs e chaves).
+3. Suba o projeto com:
+```bash
+make setup
 ```
-npm install
-```
-2. Rode o frontend:
-```
-npm run dev
-```
+
+O alvo `make setup` executa:
+- `docker compose build`
+- `docker compose up -d`
+
+Acessos locais:
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
+
+## Variaveis de ambiente
+- `.env.example` deve servir apenas como modelo para o `.env`.
+- O `.env.example` lista as variaveis esperadas, sem dados sensiveis reais.
+- Os valores reais devem ficar somente no `.env`.
 
 ## API
 Documentacao completa em `API.md`.

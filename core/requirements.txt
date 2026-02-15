@@ -1,4 +1,4 @@
-﻿# --- Core Quantum SDK (IBM) ---
+# --- Core Quantum SDK (IBM) ---
 qiskit>=1.0.0
 qiskit-aer>=0.14.0
 
@@ -38,7 +38,8 @@ httpx>=0.27.0
 
 # --- Auth + Database ---
 SQLAlchemy>=2.0.0
-PyMySQL>=1.1.0
+psycopg[binary]>=3.1.18
+pgvector>=0.3.6
 python-jose>=3.3.0
 passlib[bcrypt]>=1.7.4
 email-validator>=2.1.0

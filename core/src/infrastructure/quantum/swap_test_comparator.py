@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 import pennylane as qml
@@ -44,16 +44,37 @@ class SwapTestQuantumComparator(QuantumComparator):
     MAX_QUANTUM_VECTOR_LEN = 64
 
     def compare(self, vector_a: Sequence[float], vector_b: Sequence[float]) -> float:
+        score, _ = self.compare_with_trace(vector_a, vector_b)
+        return score
+
+    def compare_with_trace(
+        self,
+        vector_a: Sequence[float],
+        vector_b: Sequence[float],
+    ) -> tuple[float, dict[str, Any]]:
         vec_a = np.array(vector_a, dtype=float)
         vec_b = np.array(vector_b, dtype=float)
 
         if vec_a.size == 0 or vec_b.size == 0:
             raise ValueError("Vectors must be non-empty")
 
-        if max(vec_a.size, vec_b.size) > self.MAX_QUANTUM_VECTOR_LEN:
-            return _cosine_similarity(vec_a, vec_b)
+        original_dim = max(vec_a.size, vec_b.size)
 
-        target_len = _next_power_of_two(max(vec_a.size, vec_b.size))
+        if original_dim > self.MAX_QUANTUM_VECTOR_LEN:
+            score = _cosine_similarity(vec_a, vec_b)
+            trace = {
+                'method': 'cosine_fallback',
+                'used_fallback': True,
+                'original_dim': int(original_dim),
+                'prepared_dim': int(original_dim),
+                'n_qubits': None,
+                'prob_zero': None,
+                'query_state': vec_a.tolist(),
+                'doc_state': vec_b.tolist(),
+            }
+            return score, trace
+
+        target_len = _next_power_of_two(original_dim)
         vec_a = _pad_and_normalize(vec_a, target_len)
         vec_b = _pad_and_normalize(vec_b, target_len)
 
@@ -72,6 +93,16 @@ class SwapTestQuantumComparator(QuantumComparator):
             qml.Hadamard(wires=0)
             return qml.probs(wires=0)
 
-        prob_zero = circuit()[0]
-        similarity = 2 * prob_zero - 1
-        return float(np.clip(similarity, 0.0, 1.0))
+        prob_zero = float(circuit()[0])
+        similarity = float(np.clip(2 * prob_zero - 1, 0.0, 1.0))
+        trace = {
+            'method': 'swap_test',
+            'used_fallback': False,
+            'original_dim': int(original_dim),
+            'prepared_dim': int(target_len),
+            'n_qubits': int(n_qubits),
+            'prob_zero': prob_zero,
+            'query_state': vec_a.tolist(),
+            'doc_state': vec_b.tolist(),
+        }
+        return similarity, trace

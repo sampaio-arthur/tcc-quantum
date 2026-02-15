@@ -1,6 +1,7 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from pgvector.sqlalchemy import Vector
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from infrastructure.persistence.database import Base
@@ -39,3 +40,34 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship('Conversation', back_populates='messages')
+
+
+class SearchRun(Base):
+    __tablename__ = 'search_runs'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    top_k: Mapped[int] = mapped_column(Integer, nullable=False)
+    candidate_k: Mapped[int] = mapped_column(Integer, nullable=False)
+    embedder_provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedder_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    vectors = relationship('SearchVectorRecord', back_populates='run', cascade='all, delete-orphan')
+
+
+class SearchVectorRecord(Base):
+    __tablename__ = 'search_vector_records'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey('search_runs.id'), index=True, nullable=False)
+    kind: Mapped[str] = mapped_column(String(40), index=True, nullable=False)
+    doc_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    score: Mapped[float | None] = mapped_column(Float)
+    vector: Mapped[list[float] | None] = mapped_column(Vector(64))
+    payload: Mapped[dict | None] = mapped_column(JSON)
+    text_excerpt: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    run = relationship('SearchRun', back_populates='vectors')

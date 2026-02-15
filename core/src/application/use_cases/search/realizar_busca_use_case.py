@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import re
-from typing import Iterable, List
+from typing import Any, Iterable, List
 
 from application.dtos import DocumentDTO, SearchResponseDTO
 from application.interfaces import Embedder, QuantumComparator
@@ -12,6 +12,15 @@ from domain.entities import Document
 class SearchResult:
     document: Document
     score: float
+    document_vector: List[float] | None = None
+    quantum_trace: dict[str, Any] | None = None
+
+
+@dataclass(frozen=True)
+class PreparedSearchInput:
+    documents: List[Document]
+    query_vector: List[float]
+    doc_vectors: List[List[float]]
 
 
 def _normalize_text(text: str) -> str:
@@ -36,6 +45,20 @@ class RealizarBuscaUseCase:
         self._classical_comparator = classical_comparator
         self._quantum_comparator = quantum_comparator or classical_comparator
 
+    def prepare_vectors(
+        self,
+        query: str,
+        documents: Iterable[DocumentDTO],
+    ) -> PreparedSearchInput | None:
+        docs_dto = list(documents)
+        if not docs_dto:
+            return None
+
+        docs = [document_dto_to_entity(dto) for dto in docs_dto]
+        query_vector = self._embedder.embed_texts([query])[0]
+        doc_vectors = self._embedder.embed_texts([doc.text for doc in docs])
+        return PreparedSearchInput(documents=docs, query_vector=query_vector, doc_vectors=doc_vectors)
+
     def execute(
         self,
         query: str,
@@ -44,9 +67,20 @@ class RealizarBuscaUseCase:
         top_k: int = 5,
         candidate_k: int = 20,
     ) -> SearchResponseDTO:
-        results = self.score(query, documents, mode=mode, candidate_k=candidate_k)
+        prepared = self.prepare_vectors(query, documents)
+        results = self.score(
+            query,
+            documents,
+            mode=mode,
+            candidate_k=candidate_k,
+            prepared=prepared,
+        )
         limited_results = list(results)[:top_k]
-        answer = self.build_answer(query, limited_results)
+        answer = self.build_answer(
+            query,
+            limited_results,
+            query_vector=prepared.query_vector if prepared else None,
+        )
         return SearchResponseDTO(
             query=query,
             mode=mode,
@@ -60,14 +94,15 @@ class RealizarBuscaUseCase:
         documents: Iterable[DocumentDTO],
         mode: str = "classical",
         candidate_k: int = 20,
+        prepared: PreparedSearchInput | None = None,
     ) -> List[SearchResult]:
-        docs_dto = list(documents)
-        if not docs_dto:
+        prepared_input = prepared or self.prepare_vectors(query, documents)
+        if prepared_input is None:
             return []
 
-        docs = [document_dto_to_entity(dto) for dto in docs_dto]
-        query_vector = self._embedder.embed_texts([query])[0]
-        doc_vectors = self._embedder.embed_texts([doc.text for doc in docs])
+        docs = prepared_input.documents
+        query_vector = prepared_input.query_vector
+        doc_vectors = prepared_input.doc_vectors
 
         base_scores = [
             self._classical_comparator.compare(query_vector, vector)
@@ -81,23 +116,43 @@ class RealizarBuscaUseCase:
                 key=lambda i: base_scores[i],
                 reverse=True,
             )[:candidate_k]
-            results = [
-                SearchResult(
-                    document=docs[i],
-                    score=self._quantum_comparator.compare(query_vector, doc_vectors[i]),
+
+            results: List[SearchResult] = []
+            for i in candidate_indices:
+                doc_vector = doc_vectors[i]
+                quantum_trace = None
+
+                if hasattr(self._quantum_comparator, 'compare_with_trace'):
+                    score, quantum_trace = self._quantum_comparator.compare_with_trace(
+                        query_vector,
+                        doc_vector,
+                    )
+                else:
+                    score = self._quantum_comparator.compare(query_vector, doc_vector)
+
+                results.append(
+                    SearchResult(
+                        document=docs[i],
+                        score=score,
+                        document_vector=doc_vector,
+                        quantum_trace=quantum_trace,
+                    )
                 )
-                for i in candidate_indices
-            ]
         else:
             results = [
-                SearchResult(document=doc, score=score)
-                for doc, score in zip(docs, base_scores)
+                SearchResult(document=doc, score=score, document_vector=vector)
+                for doc, score, vector in zip(docs, base_scores, doc_vectors)
             ]
 
         results.sort(key=lambda item: item.score, reverse=True)
         return results
 
-    def build_answer(self, query: str, results: List[SearchResult]) -> str | None:
+    def build_answer(
+        self,
+        query: str,
+        results: List[SearchResult],
+        query_vector: List[float] | None = None,
+    ) -> str | None:
         if not results:
             return None
 
@@ -119,10 +174,10 @@ class RealizarBuscaUseCase:
                 return None
             return "Com base no documento, " + top_text
 
-        query_vector = self._embedder.embed_texts([query])[0]
+        effective_query_vector = query_vector or self._embedder.embed_texts([query])[0]
         sentence_vectors = self._embedder.embed_texts(candidates)
         scores = [
-            self._classical_comparator.compare(query_vector, vector)
+            self._classical_comparator.compare(effective_query_vector, vector)
             for vector in sentence_vectors
         ]
 
