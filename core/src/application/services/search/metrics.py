@@ -15,6 +15,7 @@ def compute_ranking_metrics(
     relevant_set = set(relevant_doc_ids or [])
     has_labels = len(relevant_set) > 0
 
+    accuracy_at_k = None
     recall_at_k = None
     mrr = None
     ndcg_at_k = None
@@ -22,7 +23,10 @@ def compute_ranking_metrics(
     if has_labels:
         top_k = results[:k]
         hits = [item for item in top_k if item.document.doc_id in relevant_set]
-        recall_at_k = len(hits) / len(relevant_set)
+        hit_count = len(hits)
+
+        accuracy_at_k = 1.0 if hit_count > 0 else 0.0
+        recall_at_k = hit_count / len(relevant_set)
 
         mrr = 0.0
         for index, item in enumerate(results, start=1):
@@ -37,9 +41,12 @@ def compute_ranking_metrics(
         ndcg_at_k = dcg / idcg if idcg > 0 else 0.0
 
     return SearchMetricsDTO(
+        accuracy_at_k=accuracy_at_k,
         recall_at_k=recall_at_k,
         mrr=mrr,
         ndcg_at_k=ndcg_at_k,
+        answer_similarity=None,
+        has_ideal_answer=False,
         latency_ms=latency_ms,
         k=k,
         candidate_k=candidate_k,

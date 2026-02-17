@@ -1,32 +1,46 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react';
 import { Paperclip, ArrowUp, FileText, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+interface SendPayload {
+  message: string;
+  file?: File | null;
+}
+
 interface ChatInputProps {
-  onSendMessage: (message: string, file: File) => Promise<void> | void;
+  onSendMessage: (payload: SendPayload) => Promise<void> | void;
   isLoading?: boolean;
 }
 
 export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
+  const [message, setMessage] = useState('');
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = async () => {
-    if (!attachedFile || isLoading) return;
-    const file = attachedFile;
+    const trimmed = message.trim();
+    if (isLoading) return;
+    if (!trimmed && !attachedFile) return;
+
+    const payload: SendPayload = {
+      message: trimmed || attachedFile?.name || '',
+      file: attachedFile,
+    };
+
+    setMessage('');
     setAttachedFile(null);
-    await onSendMessage(file.name, file);
+    await onSendMessage(payload);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const validTypes = ['text/plain', 'application/pdf'];
       if (validTypes.includes(file.type)) {
         setAttachedFile(file);
       } else {
-        alert('Apenas arquivos TXT e PDF são permitidos');
+        alert('Apenas arquivos TXT e PDF sao permitidos');
       }
     }
     if (fileInputRef.current) {
@@ -73,17 +87,27 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
           className="hidden"
         />
 
-        <div className="flex-1 text-sm text-muted-foreground">
-          Anexe um PDF/TXT para iniciar a comparacao.
-        </div>
+        <input
+          type="text"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void handleSubmit();
+            }
+          }}
+          placeholder="Digite sua pergunta ou anexe um PDF/TXT"
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none"
+        />
 
         <Button
           onClick={handleSubmit}
-          disabled={!attachedFile || isLoading}
+          disabled={(!message.trim() && !attachedFile) || isLoading}
           size="icon"
           className={cn(
             'h-9 w-9 rounded-full flex-shrink-0 transition-colors',
-            attachedFile
+            message.trim() || attachedFile
               ? 'bg-foreground text-background hover:bg-foreground/90'
               : 'bg-muted text-muted-foreground'
           )}
@@ -93,8 +117,9 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
       </div>
 
       <p className="text-xs text-muted-foreground text-center mt-2">
-        Quantum Search pode cometer erros. Verifique informacoes importantes.
+        A comparacao prioriza acuracia; latencia e metrica auxiliar.
       </p>
     </div>
   );
 }
+

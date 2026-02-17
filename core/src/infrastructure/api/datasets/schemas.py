@@ -17,8 +17,13 @@ class DatasetQueryOut(BaseModel):
     relevant_count: int
 
 
+class DatasetDocumentOut(BaseModel):
+    doc_id: str
+
+
 class DatasetDetailOut(BaseModel):
     dataset_id: str
     name: str
     description: str
     queries: List[DatasetQueryOut]
+    documents: List[DatasetDocumentOut]

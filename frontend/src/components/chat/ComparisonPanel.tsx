@@ -6,12 +6,12 @@ interface ComparisonPanelProps {
 
 function formatPercent(value?: number | null) {
   if (value === undefined || value === null) return '-';
-  return `${(value * 100).toFixed(1)}%`;
+  return (value * 100).toFixed(1) + '%';
 }
 
 function formatMs(value?: number | null) {
   if (value === undefined || value === null) return '-';
-  return `${value.toFixed(1)} ms`;
+  return value.toFixed(1) + ' ms';
 }
 
 function MetricBars({ label, classical, quantum }: { label: string; classical?: number | null; quantum?: number | null }) {
@@ -19,17 +19,17 @@ function MetricBars({ label, classical, quantum }: { label: string; classical?: 
   const quantumWidth = quantum ? Math.max(0, Math.min(1, quantum)) * 100 : 0;
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+    <div className='space-y-2'>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
         <span>{label}</span>
         <span>{formatPercent(classical)} | {formatPercent(quantum)}</span>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-emerald-400" style={{ width: `${classicalWidth}%` }} />
+      <div className='grid grid-cols-2 gap-3'>
+        <div className='h-2 rounded-full bg-muted overflow-hidden'>
+          <div className='h-full bg-emerald-400' style={{ width: classicalWidth + '%' }} />
         </div>
-        <div className="h-2 rounded-full bg-muted overflow-hidden">
-          <div className="h-full bg-sky-400" style={{ width: `${quantumWidth}%` }} />
+        <div className='h-2 rounded-full bg-muted overflow-hidden'>
+          <div className='h-full bg-sky-400' style={{ width: quantumWidth + '%' }} />
         </div>
       </div>
     </div>
@@ -39,25 +39,41 @@ function MetricBars({ label, classical, quantum }: { label: string; classical?: 
 function MetricsSummary({ title, metrics }: { title: string; metrics?: SearchMetrics }) {
   if (!metrics) {
     return (
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-sm font-medium">{title}</p>
-        <p className="text-xs text-muted-foreground mt-2">Sem metricas disponiveis.</p>
+      <div className='rounded-xl border border-border bg-card p-4'>
+        <p className='text-sm font-medium'>{title}</p>
+        <p className='text-xs text-muted-foreground mt-2'>Sem metricas disponiveis.</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-4 space-y-2">
-      <p className="text-sm font-medium">{title}</p>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+    <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+      <p className='text-sm font-medium'>{title}</p>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>Accuracy@{metrics.k}</span>
+        <span>{formatPercent(metrics.accuracy_at_k)}</span>
+      </div>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>Recall@{metrics.k}</span>
+        <span>{formatPercent(metrics.recall_at_k)}</span>
+      </div>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>MRR</span>
+        <span>{formatPercent(metrics.mrr)}</span>
+      </div>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>NDCG@{metrics.k}</span>
+        <span>{formatPercent(metrics.ndcg_at_k)}</span>
+      </div>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
+        <span>Similaridade resposta ideal</span>
+        <span>{formatPercent(metrics.answer_similarity)}</span>
+      </div>
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
         <span>Latencia</span>
         <span>{formatMs(metrics.latency_ms)}</span>
       </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>K</span>
-        <span>{metrics.k}</span>
-      </div>
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <div className='flex items-center justify-between text-xs text-muted-foreground'>
         <span>Candidatos</span>
         <span>{metrics.candidate_k}</span>
       </div>
@@ -72,51 +88,63 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
   const showComparison = Boolean(comparison);
   const classicalMetrics = comparison?.classical.metrics ?? response.metrics;
   const quantumMetrics = comparison?.quantum.metrics;
+  const kValue = comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5;
   const hasLabels = Boolean(classicalMetrics?.has_labels || quantumMetrics?.has_labels);
+  const hasIdealAnswer = Boolean(classicalMetrics?.has_ideal_answer || quantumMetrics?.has_ideal_answer);
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-6">
-      <div className="rounded-2xl border border-border bg-background/80 p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className='w-full max-w-3xl mx-auto px-4 pb-6'>
+      <div className='rounded-2xl border border-border bg-background/80 p-4 space-y-4'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
           <div>
-            <p className="text-sm font-semibold">Comparacao de Busca</p>
-            <p className="text-xs text-muted-foreground">Classico vs Quantico (PennyLane)</p>
+            <p className='text-sm font-semibold'>Comparacao de Busca</p>
+            <p className='text-xs text-muted-foreground'>Classico vs Quantico (PennyLane)</p>
           </div>
-          <span className="text-xs text-muted-foreground">Modo: {response.mode}</span>
+          <span className='text-xs text-muted-foreground'>Modo: {response.mode}</span>
         </div>
 
         {showComparison ? (
-          <div className="grid gap-3 md:grid-cols-2">
-            <MetricsSummary title="Classico" metrics={comparison?.classical.metrics} />
-            <MetricsSummary title="Quantico" metrics={comparison?.quantum.metrics} />
+          <div className='grid gap-3 md:grid-cols-2'>
+            <MetricsSummary title='Classico' metrics={comparison?.classical.metrics} />
+            <MetricsSummary title='Quantico' metrics={comparison?.quantum.metrics} />
           </div>
         ) : (
-          <MetricsSummary title="Resultado" metrics={response.metrics} />
+          <MetricsSummary title='Resultado' metrics={response.metrics} />
         )}
 
-        {showComparison && hasLabels && (
-          <div className="space-y-4">
+        {showComparison && (hasLabels || hasIdealAnswer) && (
+          <div className='space-y-4'>
             <MetricBars
-              label={`Recall@${comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5}`}
+              label={'Accuracy@' + kValue}
+              classical={comparison?.classical.metrics?.accuracy_at_k}
+              quantum={comparison?.quantum.metrics?.accuracy_at_k}
+            />
+            <MetricBars
+              label={'Recall@' + kValue}
               classical={comparison?.classical.metrics?.recall_at_k}
               quantum={comparison?.quantum.metrics?.recall_at_k}
             />
             <MetricBars
-              label="MRR"
+              label='MRR'
               classical={comparison?.classical.metrics?.mrr}
               quantum={comparison?.quantum.metrics?.mrr}
             />
             <MetricBars
-              label={`NDCG@${comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5}`}
+              label={'NDCG@' + kValue}
               classical={comparison?.classical.metrics?.ndcg_at_k}
               quantum={comparison?.quantum.metrics?.ndcg_at_k}
+            />
+            <MetricBars
+              label='Similaridade resposta ideal'
+              classical={comparison?.classical.metrics?.answer_similarity}
+              quantum={comparison?.quantum.metrics?.answer_similarity}
             />
           </div>
         )}
 
-        {showComparison && !hasLabels && (
-          <p className="text-xs text-muted-foreground">
-            As metricas de ranking aparecem apenas quando a consulta possui rotulos de relevancia.
+        {showComparison && !hasLabels && !hasIdealAnswer && (
+          <p className='text-xs text-muted-foreground'>
+            As metricas de acuracia aparecem apenas quando a consulta possui gabarito salvo.
           </p>
         )}
       </div>

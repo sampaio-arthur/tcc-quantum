@@ -11,6 +11,13 @@ import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Conversation, Message, SearchResponse } from '@/lib/api';
 
+const DEFAULT_DATASET_ID = 'mini-rag';
+
+interface SendPayload {
+  message: string;
+  file?: File | null;
+}
+
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -23,7 +30,7 @@ export default function Chat() {
 
   const [lastResponse, setLastResponse] = useState<SearchResponse | null>(null);
 
-  const responseCacheKey = (id: number) => `qs:lastResponse:${id}`;
+  const responseCacheKey = (id: number) => `qs:lastResponse:v2:${id}`;
 
   const loadCachedResponse = (id: number): SearchResponse | null => {
     const raw = localStorage.getItem(responseCacheKey(id));
@@ -44,14 +51,12 @@ export default function Chat() {
     localStorage.removeItem(responseCacheKey(id));
   };
 
-  // Redirect to auth if not logged in
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
     }
   }, [user, authLoading, navigate]);
 
-  // Load conversations
   useEffect(() => {
     if (user) {
       loadConversations();
@@ -100,47 +105,64 @@ export default function Chat() {
   };
 
   const buildAssistantContent = (searchResponse: SearchResponse) => {
-    let assistantContent = '';
+    const comparison = searchResponse.comparison;
+    const classical = comparison?.classical.metrics;
+    const quantum = comparison?.quantum.metrics;
 
-    if (searchResponse.results.length > 0) {
-      assistantContent += 'Resultados:\n';
-      searchResponse.results.slice(0, 3).forEach((result, index) => {
-        assistantContent += `**${index + 1}.** ${result.text}\n(Relevancia: ${(result.score * 100).toFixed(1)}%)\n\n`;
-      });
-    } else {
-      assistantContent = 'Nao encontrei resultados relevantes para sua busca.';
+    const fallbackAnswer =
+      searchResponse.answer && searchResponse.answer.toLowerCase().includes('nao foi possivel')
+        ? searchResponse.answer
+        : 'Nao foi possivel consultar.';
+
+    if (!comparison || !classical || !quantum) {
+      return fallbackAnswer;
     }
 
-    if (searchResponse.comparison) {
-      const classical = searchResponse.comparison.classical.metrics;
-      const quantum = searchResponse.comparison.quantum.metrics;
-      if (classical && quantum && classical.has_labels) {
-        assistantContent += '\nResumo de comparacao (metrics):\n';
-        assistantContent += `Classico - Recall@${classical.k}: ${(classical.recall_at_k ?? 0) * 100}% | MRR: ${(classical.mrr ?? 0) * 100}%\n`;
-        assistantContent += `Quantico - Recall@${quantum.k}: ${(quantum.recall_at_k ?? 0) * 100}% | MRR: ${(quantum.mrr ?? 0) * 100}%\n`;
-      }
+    const hasLabels = Boolean(classical.has_labels || quantum.has_labels);
+    const hasIdealAnswer = Boolean(classical.has_ideal_answer || quantum.has_ideal_answer);
+
+    if (!hasLabels && !hasIdealAnswer) {
+      return searchResponse.answer && !searchResponse.answer.toLowerCase().includes('nao foi possivel')
+        ? 'Consulta executada, mas sem gabarito para comparar acuracia.'
+        : fallbackAnswer;
     }
 
-    return assistantContent.trim();
+    const formatPct = (value?: number | null) =>
+      value === undefined || value === null ? '-' : (value * 100).toFixed(1) + '%';
+
+    return [
+      'Comparacao de acuracia (pipeline):',
+      'Classico  - Accuracy@' + classical.k + ': ' + formatPct(classical.accuracy_at_k) + ' | Recall@' + classical.k + ': ' + formatPct(classical.recall_at_k) + ' | MRR: ' + formatPct(classical.mrr) + ' | NDCG@' + classical.k + ': ' + formatPct(classical.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(classical.answer_similarity),
+      'Quantico  - Accuracy@' + quantum.k + ': ' + formatPct(quantum.accuracy_at_k) + ' | Recall@' + quantum.k + ': ' + formatPct(quantum.recall_at_k) + ' | MRR: ' + formatPct(quantum.mrr) + ' | NDCG@' + quantum.k + ': ' + formatPct(quantum.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(quantum.answer_similarity),
+    ].join('\n');
   };
+  const handleSendMessage = async (payload: SendPayload) => {
+    const userText = payload.message.trim();
+    if (!userText && !payload.file) return;
 
-  const handleSendMessage = async (filename: string, file: File) => {
     setIsLoading(true);
 
     try {
       let conversationId = activeConversationId;
 
       if (!conversationId) {
-        const newConversation = await api.createConversation(filename);
+        const title = userText || payload.file?.name || 'Nova consulta';
+        const newConversation = await api.createConversation(title);
         conversationId = newConversation.id;
         setActiveConversationId(conversationId);
         setConversations((prev) => [newConversation, ...prev]);
       }
 
-      const userMessage = await api.addMessage(conversationId, 'user', filename);
+      const userMessage = await api.addMessage(conversationId, 'user', userText || payload.file?.name || 'Consulta');
       setMessages((prev) => [...prev, userMessage]);
 
-      const searchResponse = await api.searchWithFile(filename, file);
+      let searchResponse: SearchResponse;
+      if (payload.file) {
+        searchResponse = await api.searchWithFile(userText || payload.file.name, payload.file);
+      } else {
+        await api.indexDataset(DEFAULT_DATASET_ID);
+        searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
+      }
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -149,10 +171,8 @@ export default function Chat() {
 
       const assistantContent = buildAssistantContent(searchResponse);
 
-      if (assistantContent.length > 0) {
-        const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
-        setMessages((prev) => [...prev, assistantMessage]);
-      }
+      const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
       const detail = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -161,7 +181,7 @@ export default function Chat() {
         {
           id: Date.now(),
           role: 'assistant',
-          content: `Desculpe, ocorreu um erro ao processar sua mensagem: ${detail}`,
+          content: `Nao foi possivel consultar. ${detail}`,
           created_at: new Date().toISOString(),
         },
       ]);
@@ -184,7 +204,6 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      {/* Sidebar */}
       <ChatSidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -195,9 +214,7 @@ export default function Chat() {
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
       />
 
-      {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 min-h-0">
-        {/* Header */}
         <header className="h-14 flex items-center px-4 border-b border-border">
           {isSidebarCollapsed && (
             <Button
@@ -213,21 +230,16 @@ export default function Chat() {
         </header>
 
         <div className="flex-1 min-h-0 overflow-y-auto">
-          {/* Messages or Welcome */}
           {messages.length === 0 && !isLoading ? (
             <WelcomeScreen />
           ) : (
             <MessageList messages={messages} isLoading={isLoading} />
           )}
 
-          {/* Pipeline */}
-          <PipelinePanel visible={Boolean(lastResponse)} />
-
-          {/* Comparison Panel */}
+          <PipelinePanel response={lastResponse} />
           <ComparisonPanel response={lastResponse} />
         </div>
 
-        {/* Input */}
         <div className="pb-6 pt-2">
           <ChatInput onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
@@ -235,3 +247,7 @@ export default function Chat() {
     </div>
   );
 }
+
+
+
+

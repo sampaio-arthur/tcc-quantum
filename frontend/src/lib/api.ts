@@ -29,6 +29,36 @@ export interface ConversationDetail extends Conversation {
   messages: Message[];
 }
 
+export interface DatasetSummary {
+  dataset_id: string;
+  name: string;
+  description: string;
+  document_count: number;
+  query_count: number;
+}
+
+export interface DatasetDetail {
+  dataset_id: string;
+  name: string;
+  description: string;
+  queries: { query_id: string; query: string; relevant_count: number }[];
+  documents: { doc_id: string }[];
+}
+
+export interface BenchmarkLabelInput {
+  dataset_id: string;
+  query_text: string;
+  ideal_answer: string;
+}
+
+export interface BenchmarkLabel {
+  benchmark_id: string;
+  dataset_id: string;
+  query_text: string;
+  ideal_answer: string;
+  relevant_doc_ids: string[];
+}
+
 export interface SearchResult {
   doc_id: string;
   text: string;
@@ -36,9 +66,12 @@ export interface SearchResult {
 }
 
 export interface SearchMetrics {
+  accuracy_at_k?: number | null;
   recall_at_k?: number | null;
   mrr?: number | null;
   ndcg_at_k?: number | null;
+  answer_similarity?: number | null;
+  has_ideal_answer: boolean;
   latency_ms: number;
   k: number;
   candidate_k: number;
@@ -251,6 +284,110 @@ class ApiClient {
 
     return response.json();
   }
+
+  async indexDataset(datasetId: string, forceReindex = false): Promise<void> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/dataset/index`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({ dataset_id: datasetId, force_reindex: forceReindex }),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao indexar dataset');
+      throw new Error(detail);
+    }
+  }
+
+  async searchDataset(query: string, datasetId: string, queryId?: string): Promise<SearchResponse> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/dataset`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        dataset_id: datasetId,
+        query,
+        query_id: queryId,
+        mode: 'compare',
+        top_k: 5,
+        candidate_k: 20,
+      }),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro na busca no dataset');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+  async listDatasets(): Promise<DatasetSummary[]> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/datasets`, {
+      headers: this.getHeaders(false),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao listar datasets');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async getDataset(datasetId: string): Promise<DatasetDetail> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/datasets/${datasetId}`, {
+      headers: this.getHeaders(false),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao carregar dataset');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async listBenchmarkLabels(datasetId: string): Promise<BenchmarkLabel[]> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/benchmarks/labels?dataset_id=${encodeURIComponent(datasetId)}`, {
+      headers: this.getHeaders(false),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao listar gabaritos');
+      throw new Error(detail);
+    }
+
+    const payload = await response.json();
+    return payload.items ?? [];
+  }
+
+  async upsertBenchmarkLabel(payload: BenchmarkLabelInput): Promise<BenchmarkLabel> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/benchmarks/labels`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao salvar gabarito');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async deleteBenchmarkLabel(datasetId: string, benchmarkId: string): Promise<void> {
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/benchmarks/labels/${encodeURIComponent(datasetId)}/${encodeURIComponent(benchmarkId)}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(false),
+    });
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao remover gabarito');
+      throw new Error(detail);
+    }
+  }
 }
 
 export const api = new ApiClient();
+
+
+

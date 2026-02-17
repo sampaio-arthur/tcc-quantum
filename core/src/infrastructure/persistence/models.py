@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from infrastructure.persistence.database import Base
@@ -71,3 +71,55 @@ class SearchVectorRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     run = relationship('SearchRun', back_populates='vectors')
+
+
+class DatasetDocumentIndex(Base):
+    __tablename__ = 'dataset_document_index'
+    __table_args__ = (
+        UniqueConstraint(
+            'dataset_id',
+            'doc_id',
+            'embedder_provider',
+            'embedder_model',
+            name='uq_dataset_doc_embedder',
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    doc_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    vector: Mapped[list[float] | None] = mapped_column(Vector(64))
+    payload: Mapped[dict | None] = mapped_column(JSON)
+    embedder_provider: Mapped[str] = mapped_column(String(64), nullable=False)
+    embedder_model: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BenchmarkLabel(Base):
+    __tablename__ = 'benchmark_labels'
+    __table_args__ = (
+        UniqueConstraint('dataset_id', 'label_id', name='uq_benchmark_label_dataset_label_id'),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    label_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    relevant_doc_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BenchmarkGroundTruth(Base):
+    __tablename__ = 'benchmark_ground_truths'
+    __table_args__ = (
+        UniqueConstraint('dataset_id', 'query_key', name='uq_benchmark_ground_truth_dataset_query_key'),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    dataset_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    query_key: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    query_text: Mapped[str] = mapped_column(Text, nullable=False)
+    ideal_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    relevant_doc_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

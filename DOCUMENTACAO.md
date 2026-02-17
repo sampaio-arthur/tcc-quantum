@@ -1,79 +1,50 @@
-# Documentacao do Projeto - Quantum Search (TCC)
+Documentacao Tecnica - Quantum Search (TCC)
 
-## Objetivo
-Comparar busca semantica classica e abordagem quantico-inspirada no contexto de RAG, medindo qualidade de ranking e latencia.
+1. Escopo
+- Comparar busca classica e busca quantico-inspirada em base unica.
+- Foco principal: acuracia.
+- Latencia: metrica auxiliar.
 
-## O que a plataforma faz
-- Recebe PDF/TXT ou usa dataset publico.
-- Executa busca classica, quantica ou `compare`.
-- Gera resposta textual baseada em sentencas relevantes.
-- Calcula metricas (Recall@K, MRR, NDCG@K quando houver rotulos) e latencia.
-- Persiste execucoes de busca para auditoria e reproducao.
+2. Pipeline ponta a ponta
+2.1 Carga e indexacao
+- Dataset em core/data/public_datasets.json.
+- Cada documento e transformado em embedding.
+- Persistencia no banco para reuso em buscas futuras na tabela dataset_document_index.
 
-## Fluxo principal
-1. Ingestao e chunking de documentos.
-2. Geracao de embeddings via API Gemini (sem transformer local).
-3. Ranking classico por cosine similarity.
-4. Reranking quantico-inspirado por swap test.
-5. Montagem de resposta e metricas.
-6. Persistencia dos rastros no PostgreSQL com pgvector.
+2.2 Consulta
+- Usuario envia pergunta livre.
+- Pergunta e transformada em embedding para busca vetorial e semantica.
+- Sistema executa classico e quantico no modo compare.
 
-## Modos de busca
-- `classical`: ranking direto por cosine.
-- `quantum`: prefiltra candidatos por score classico e reranqueia com swap test.
-- `compare`: executa os dois modos com o mesmo conjunto de embeddings.
+2.3 Gabarito
+- Tela de gabaritos recebe dataset, pergunta e resposta ideal.
+- Backend salva o gabarito e infere automaticamente documentos relevantes.
+- Usuario nao precisa informar IDs tecnicos.
 
-## Persistencia de experimentos
-Banco: PostgreSQL com extensao `vector` (pgvector).
+2.4 Avaliacao
+Metricas de ranking (baseadas em relevant_doc_ids inferidos):
+- accuracy_at_k
+- recall_at_k
+- mrr
+- ndcg_at_k
 
-Tabelas:
-- `search_runs`: metadados da execucao (query, modo, top_k, candidate_k, modelo de embedding).
-- `search_vector_records`: vetores e tra?os por execucao.
+Metrica de resposta (baseada em resposta ideal):
+- answer_similarity
 
-Tipos de registro (`kind`):
-- `query_embedding`
-- `document_embedding`
-- `quantum_query_state`
-- `quantum_doc_state`
+Metrica auxiliar:
+- latency_ms
 
-Observacao sobre estados quanticos:
-- O sistema persiste o estado preparado para o circuito (amplitudes normalizadas/padded) e metadados do trace.
-- Em dimensoes altas, pode ocorrer fallback para cosine por custo computacional.
+3. Persistencia
+- dataset_document_index: documentos e embeddings indexados.
+- benchmark_ground_truths: gabaritos (query_text, ideal_answer, relevant_doc_ids).
+- search_runs e search_vector_records: rastros de execucao.
 
-## Tecnologias
-Backend:
-- Python + FastAPI
-- Gemini Embeddings API
-- PennyLane (simulacao quantica)
-- SQLAlchemy + PostgreSQL
-- pgvector
+4. Fallback
+- Quando a consulta nao tem relevancia suficiente, resposta: Nao foi possivel consultar.
 
-Frontend:
-- React + Vite
-- TailwindCSS
-
-## Estrutura de codigo (resumo)
-- `core/src/application/use_cases/search/realizar_busca_use_case.py`
-- `core/src/application/services/search/search_service.py`
-- `core/src/infrastructure/quantum/swap_test_comparator.py`
-- `core/src/infrastructure/persistence/search_trace_repository.py`
-- `core/src/infrastructure/persistence/models.py`
-- `core/src/infrastructure/api/search/search_controller_pg.py`
-
-## Execucao
-1. Copie `.env.example` para `.env` e preencha os valores.
-2. Suba com Docker:
-```bash
-docker compose build
-docker compose up -d
-```
-
-## Limitacoes conhecidas
-- Swap test simulado fica caro em alta dimensionalidade.
-- Em cenarios de custo alto, o comparador quantico pode usar fallback classico.
-- A resposta textual e extrativa (nao usa LLM gerador dedicado para resposta final).
-
-## Proximos passos sugeridos
-- Endpoint de auditoria para listar `search_runs` e rastros.
-- Benchmark automatizado por dataset com relatorio reproducivel.
-- Indices vetoriais adicionais e tuning de performance no Postgres.
+5. Endpoints chave
+- POST /search/dataset/index
+- POST /search/dataset
+- GET /benchmarks/labels
+- POST /benchmarks/labels
+- DELETE /benchmarks/labels/{dataset_id}/{benchmark_id}

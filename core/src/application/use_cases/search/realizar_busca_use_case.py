@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+import os
 import re
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Sequence
 
 from application.dtos import DocumentDTO, SearchResponseDTO
 from application.interfaces import Embedder, QuantumComparator
@@ -34,6 +35,10 @@ def _split_sentences(text: str) -> List[str]:
     return [part.strip() for part in parts if part.strip()]
 
 
+def _to_float_vectors(vectors: Iterable[Sequence[float]]) -> List[List[float]]:
+    return [[float(value) for value in vector] for vector in vectors]
+
+
 class RealizarBuscaUseCase:
     def __init__(
         self,
@@ -44,6 +49,7 @@ class RealizarBuscaUseCase:
         self._embedder = embedder
         self._classical_comparator = classical_comparator
         self._quantum_comparator = quantum_comparator or classical_comparator
+        self._min_relevance_score = float(os.getenv('SEARCH_MIN_RELEVANCE_SCORE', '0.55'))
 
     def prepare_vectors(
         self,
@@ -58,6 +64,24 @@ class RealizarBuscaUseCase:
         query_vector = self._embedder.embed_texts([query])[0]
         doc_vectors = self._embedder.embed_texts([doc.text for doc in docs])
         return PreparedSearchInput(documents=docs, query_vector=query_vector, doc_vectors=doc_vectors)
+
+    def prepare_with_indexed_vectors(
+        self,
+        query: str,
+        documents: Iterable[DocumentDTO],
+        doc_vectors: Iterable[Sequence[float]],
+    ) -> PreparedSearchInput | None:
+        docs_dto = list(documents)
+        vectors = _to_float_vectors(doc_vectors)
+
+        if not docs_dto:
+            return None
+        if len(docs_dto) != len(vectors):
+            raise ValueError('Document and vector counts must match')
+
+        docs = [document_dto_to_entity(dto) for dto in docs_dto]
+        query_vector = self._embedder.embed_texts([query])[0]
+        return PreparedSearchInput(documents=docs, query_vector=query_vector, doc_vectors=vectors)
 
     def execute(
         self,
@@ -154,7 +178,11 @@ class RealizarBuscaUseCase:
         query_vector: List[float] | None = None,
     ) -> str | None:
         if not results:
-            return None
+            return 'Nao foi possivel consultar.'
+
+        top_score = results[0].score
+        if top_score < self._min_relevance_score:
+            return 'Nao foi possivel consultar.'
 
         candidates: List[str] = []
         for item in results[:3]:
@@ -171,8 +199,8 @@ class RealizarBuscaUseCase:
         if not candidates:
             top_text = _normalize_text(results[0].document.text)
             if not top_text:
-                return None
-            return "Com base no documento, " + top_text
+                return 'Nao foi possivel consultar.'
+            return 'Com base no documento, ' + top_text
 
         effective_query_vector = query_vector or self._embedder.embed_texts([query])[0]
         sentence_vectors = self._embedder.embed_texts(candidates)
@@ -184,4 +212,4 @@ class RealizarBuscaUseCase:
         top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:3]
         top_sentences = [candidates[i] for i in top_indices]
 
-        return "Com base no documento, " + " ".join(top_sentences)
+        return 'Com base no documento, ' + ' '.join(top_sentences)
