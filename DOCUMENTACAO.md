@@ -1,50 +1,188 @@
 Documentacao Tecnica - Quantum Search (TCC)
 
-1. Escopo
-- Comparar busca classica e busca quantico-inspirada em base unica.
-- Foco principal: acuracia.
-- Latencia: metrica auxiliar.
+Escopo tecnico
+- Comparar busca classica e busca quantico-inspirada no mesmo pipeline.
+- Medir acuracia de ranking, similaridade de resposta e latencia.
 
-2. Pipeline ponta a ponta
-2.1 Carga e indexacao
-- Dataset em core/data/public_datasets.json.
-- Cada documento e transformado em embedding.
-- Persistencia no banco para reuso em buscas futuras na tabela dataset_document_index.
+Arquitetura
 
-2.2 Consulta
-- Usuario envia pergunta livre.
-- Pergunta e transformada em embedding para busca vetorial e semantica.
-- Sistema executa classico e quantico no modo compare.
+Camadas
+- domain: entidades e contratos de dominio.
+- application: DTOs, servicos e use cases.
+- infrastructure: API, persistencia, embeddings, comparadores quanticos e classicos.
+- frontend: SPA React para operacao da plataforma.
 
-2.3 Gabarito
-- Tela de gabaritos recebe dataset, pergunta e resposta ideal.
-- Backend salva o gabarito e infere automaticamente documentos relevantes.
-- Usuario nao precisa informar IDs tecnicos.
+Servicos em runtime
+- core: API FastAPI.
+- frontend: aplicacao React com Vite.
+- db: Postgres com pgvector.
 
-2.4 Avaliacao
-Metricas de ranking (baseadas em relevant_doc_ids inferidos):
+Topologia
+- frontend chama core por HTTP.
+- core consulta base relacional e vetorial no Postgres.
+- core utiliza provedor de embeddings configurado por ambiente.
+
+Pipeline ponta a ponta
+
+Etapa 1 - Dataset
+- Fonte: core/data/public_datasets.json.
+- Estrutura: datasets, documents, queries.
+
+Etapa 2 - Indexacao
+1) Ler documentos do dataset.
+2) Gerar embeddings.
+3) Persistir em dataset_document_index.
+4) Reusar indice existente quando provider e model coincidirem.
+
+Etapa 3 - Consulta
+1) Receber pergunta.
+2) Gerar embedding da pergunta.
+3) Executar ramo classico e ramo quantico quando mode compare.
+4) Gerar resposta final com trechos mais relevantes.
+
+Etapa 4 - Avaliacao
+1) Resolver gabarito por query_id ou query_text.
+2) Calcular metricas de ranking usando relevant_doc_ids.
+3) Calcular answer_similarity com resposta ideal quando existir.
+4) Retornar metrics e algorithm_details.
+
+Fluxo classico
+- Calcula similaridade cosseno pergunta x todos documentos.
+- Ordena por score descrescente.
+- Usa top resultados para resposta e metricas.
+
+Fluxo quantico-inspirado
+- Calcula score classico inicial para todos documentos.
+- Seleciona candidate_k melhores candidatos classicos.
+- Reavalia candidatos com swap test (PennyLane).
+- Reordena por score quantico final.
+
+Dimensionalidade quantica
+- Simulacao trabalha com limite pratico de 64 dimensoes.
+- Vetores maiores sao projetados para 64 antes do circuito.
+- O retorno inclui debug com method, used_projection e n_qubits.
+
+Busca por arquivo
+
+Entrada
+- Arquivo TXT ou PDF.
+- Pergunta opcional.
+
+Processamento
+1) Extrair texto.
+2) Chunking por sentencas com overlap.
+3) Buscar sobre os chunks.
+4) Se existir gabarito para a pergunta no dataset padrao, usar ideal_answer.
+5) Inferir relevant_doc_ids nos chunks para ranking.
+
+Persistencia
+
+Tabelas funcionais
+- users
+- conversations
+- messages
+- dataset_document_index
+- benchmark_ground_truths
+- search_runs
+- search_vector_records
+
+Gabarito e inferencia de relevantes
+- Entrada do usuario: query_text e ideal_answer.
+- Backend tokeniza texto e calcula overlap com documentos.
+- Score ponderado por pergunta e resposta ideal.
+- Seleciona top documentos como relevant_doc_ids.
+
+Metricas
+
+Ranking
 - accuracy_at_k
 - recall_at_k
 - mrr
 - ndcg_at_k
 
-Metrica de resposta (baseada em resposta ideal):
+Resposta
 - answer_similarity
 
-Metrica auxiliar:
+Operacao
 - latency_ms
 
-3. Persistencia
-- dataset_document_index: documentos e embeddings indexados.
-- benchmark_ground_truths: gabaritos (query_text, ideal_answer, relevant_doc_ids).
-- search_runs e search_vector_records: rastros de execucao.
+Campos de controle
+- has_labels
+- has_ideal_answer
+- k
+- candidate_k
 
-4. Fallback
-- Quando a consulta nao tem relevancia suficiente, resposta: Nao foi possivel consultar.
+Fallbacks e limites
+- Resposta fallback por baixa relevancia: Nao foi possivel consultar.
+- Limiar: SEARCH_MIN_RELEVANCE_SCORE.
+- Rate limit: 10 requisicoes por minuto por host nas rotas de busca.
+- Upload em /search/file limitado a 5 MB.
 
-5. Endpoints chave
-- POST /search/dataset/index
-- POST /search/dataset
-- GET /benchmarks/labels
-- POST /benchmarks/labels
-- DELETE /benchmarks/labels/{dataset_id}/{benchmark_id}
+Seguranca
+- Autenticacao JWT.
+- Hash de senha com bcrypt.
+- Endpoints de conversa e mensagens protegidos por usuario autenticado.
+
+Configuracao
+
+Variaveis principais
+- APP_ENV
+- SECRET_KEY
+- JWT_SECRET
+- JWT_ALGORITHM
+- ACCESS_TOKEN_EXPIRE_MINUTES
+- DB_HOST
+- DB_PORT
+- DB_NAME
+- DB_USER
+- DB_PASSWORD
+- DATABASE_URL
+- VITE_API_BASE_URL
+- EMBEDDER_PROVIDER
+- GEMINI_API_KEY
+- GEMINI_EMBEDDING_MODEL
+
+Variaveis funcionais
+- DEFAULT_DATASET_ID
+- SEARCH_MIN_RELEVANCE_SCORE
+
+Procedimento operacional recomendado
+1) Subir servicos.
+2) Registrar e autenticar usuario.
+3) Cadastrar gabaritos.
+4) Indexar dataset.
+5) Executar compare classico x quantico.
+6) Avaliar metrics e algorithm_details.
+7) Repetir com novos casos de teste.
+
+Tecnologias e bibliotecas
+
+Backend
+- Python, FastAPI, Uvicorn.
+- SQLAlchemy, psycopg, pgvector.
+- NumPy, SciPy, pandas, scikit-learn.
+- PennyLane, Qiskit, Qiskit Aer.
+- pypdf.
+- python-jose, passlib, bcrypt.
+
+Frontend
+- React, TypeScript, Vite.
+- React Router.
+- Tailwind CSS.
+- Radix UI.
+- TanStack React Query.
+
+Infra
+- Docker Compose.
+- Container Postgres com imagem pgvector/pgvector:pg16.
+
+Limitacoes atuais
+- Dataset ainda pequeno para inferencias estatisticas amplas.
+- Simulacao quantica em software, nao hardware quantico real.
+- CORS aberto para qualquer origem no ambiente atual.
+
+Evolucoes recomendadas
+- Ampliar base de dados e variedade de gabaritos.
+- Criar benchmark batch para regressao continua.
+- Construir dashboard historico de runs e metricas.
+- Endurecer configuracao de seguranca para producao.
