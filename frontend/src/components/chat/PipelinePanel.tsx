@@ -1,4 +1,4 @@
-import { SearchResponse } from '@/lib/api';
+import { SearchAlgorithmDetails, SearchResponse } from '@/lib/api';
 
 interface PipelinePanelProps {
   response: SearchResponse | null;
@@ -26,6 +26,17 @@ function DeltaRow({ label, classical, quantum }: { label: string; classical?: nu
   );
 }
 
+function AlgoLine({ label, details }: { label: string; details?: SearchAlgorithmDetails }) {
+  return (
+    <div className='rounded-lg border border-border bg-card px-3 py-2 text-xs'>
+      <div className='text-muted-foreground'>{label}</div>
+      <div className='mt-1 text-foreground'>
+        {details ? details.comparator + ' | ' + details.candidate_strategy : 'Sem detalhes de algoritmo'}
+      </div>
+    </div>
+  );
+}
+
 export function PipelinePanel({ response }: PipelinePanelProps) {
   if (!response?.comparison) return null;
 
@@ -41,6 +52,11 @@ export function PipelinePanel({ response }: PipelinePanelProps) {
         <div>
           <p className='text-sm font-semibold'>Pipeline de Acuracia</p>
           <p className='text-xs text-muted-foreground'>Comparacao classico vs quantico com base no gabarito da consulta</p>
+        </div>
+
+        <div className='grid gap-2'>
+          <AlgoLine label='Fluxo classico' details={response.comparison.classical.algorithm_details} />
+          <AlgoLine label='Fluxo quantico' details={response.comparison.quantum.algorithm_details} />
         </div>
 
         {(hasLabels || hasIdealAnswer) ? (

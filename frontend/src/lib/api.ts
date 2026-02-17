@@ -78,10 +78,19 @@ export interface SearchMetrics {
   has_labels: boolean;
 }
 
+export interface SearchAlgorithmDetails {
+  algorithm: string;
+  comparator: string;
+  candidate_strategy: string;
+  description: string;
+  debug?: Record<string, unknown> | null;
+}
+
 export interface SearchResponseLite {
   results: SearchResult[];
   answer?: string;
   metrics?: SearchMetrics;
+  algorithm_details?: SearchAlgorithmDetails;
 }
 
 export interface SearchComparison {
@@ -96,6 +105,7 @@ export interface SearchResponse {
   answer?: string;
   metrics?: SearchMetrics;
   comparison?: SearchComparison;
+  algorithm_details?: SearchAlgorithmDetails;
 }
 
 class ApiClient {

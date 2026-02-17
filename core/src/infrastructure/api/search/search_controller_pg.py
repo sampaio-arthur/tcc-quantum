@@ -95,6 +95,7 @@ def _to_response_schema(response) -> SearchResponseSchema:
         answer=response.answer,
         metrics=_metrics_to_schema(response.metrics),
         comparison=comparison,
+        algorithm_details=_algorithm_details_to_schema(response.algorithm_details),
     )
 
 
@@ -106,6 +107,7 @@ def _to_response_lite_schema(response) -> SearchResponseLiteSchema:
         ],
         answer=response.answer,
         metrics=_metrics_to_schema(response.metrics),
+        algorithm_details=_algorithm_details_to_schema(response.algorithm_details),
     )
 
 
@@ -125,6 +127,17 @@ def _metrics_to_schema(metrics):
         'has_labels': metrics.has_labels,
     }
 
+
+def _algorithm_details_to_schema(details):
+    if details is None:
+        return None
+    return {
+        'algorithm': details.algorithm,
+        'comparator': details.comparator,
+        'candidate_strategy': details.candidate_strategy,
+        'description': details.description,
+        'debug': details.debug,
+    }
 
 def _dataset_documents(dataset: dict) -> list[DocumentDTO]:
     return [
@@ -200,25 +213,39 @@ def search_file(
     if file is None:
         raise HTTPException(status_code=400, detail='Arquivo nao enviado')
     _enforce_rate_limit(request)
-    if not query or not query.strip():
-        query = 'Resumo do documento'
+
+    query_text = (query or '').strip()
+    if not query_text:
+        query_text = 'Resumo do documento'
+
     content = _read_upload(file)
     service, _ = _build_runtime(db)
-    dto = SearchFileRequestDTO(query=query, filename=file.filename or '', content=content)
+    dto = SearchFileRequestDTO(query=query_text, filename=file.filename or '', content=content)
+
+    default_dataset_id = os.getenv('DEFAULT_DATASET_ID', 'mini-rag').strip() or 'mini-rag'
+    ideal_answer: str | None = None
+    label_repository = BenchmarkLabelRepository(db)
+    db_label = label_repository.find_by_query_text(default_dataset_id, query_text)
+    if db_label:
+        ideal_answer = db_label.ideal_answer
 
     if mode == 'compare':
-        response = service.comparar_por_arquivo(dto, top_k=top_k, candidate_k=candidate_k)
+        response = service.comparar_por_arquivo(
+            dto,
+            top_k=top_k,
+            candidate_k=candidate_k,
+            ideal_answer=ideal_answer,
+        )
     else:
         response = service.buscar_por_arquivo(
             dto,
             mode=mode,
             top_k=top_k,
             candidate_k=candidate_k,
+            ideal_answer=ideal_answer,
         )
 
     return _to_response_schema(response)
-
-
 @router.post('/dataset/index', response_model=DatasetIndexResponseSchema)
 def index_dataset(
     payload: DatasetIndexRequestSchema,

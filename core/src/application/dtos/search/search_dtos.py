@@ -39,10 +39,20 @@ class SearchMetricsDTO:
 
 
 @dataclass(frozen=True)
+class SearchAlgorithmDetailsDTO:
+    algorithm: str
+    comparator: str
+    candidate_strategy: str
+    description: str
+    debug: Optional[dict] = None
+
+
+@dataclass(frozen=True)
 class SearchResponseLiteDTO:
     results: List[SearchResultDTO]
     answer: Optional[str] = None
     metrics: Optional[SearchMetricsDTO] = None
+    algorithm_details: Optional[SearchAlgorithmDetailsDTO] = None
 
 
 @dataclass(frozen=True)
@@ -59,3 +69,4 @@ class SearchResponseDTO:
     answer: Optional[str] = None
     metrics: Optional[SearchMetricsDTO] = None
     comparison: Optional[SearchComparisonDTO] = None
+    algorithm_details: Optional[SearchAlgorithmDetailsDTO] = None

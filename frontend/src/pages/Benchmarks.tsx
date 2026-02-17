@@ -2,14 +2,15 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { api, BenchmarkLabel, DatasetSummary } from '@/lib/api';
+import { api, BenchmarkLabel } from '@/lib/api';
+
+const DEFAULT_DATASET_ID = 'mini-rag';
 
 export default function Benchmarks() {
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  const [datasets, setDatasets] = useState<DatasetSummary[]>([]);
-  const [activeDatasetId, setActiveDatasetId] = useState('');
+  const [activeDatasetId] = useState(DEFAULT_DATASET_ID);
   const [labels, setLabels] = useState<BenchmarkLabel[]>([]);
   const [isBusy, setIsBusy] = useState(false);
 
@@ -23,26 +24,8 @@ export default function Benchmarks() {
 
   useEffect(() => {
     if (!user) return;
-    void loadDatasets();
-  }, [user]);
-
-  useEffect(() => {
-    if (!activeDatasetId) return;
     void loadLabels(activeDatasetId);
-  }, [activeDatasetId]);
-
-  const loadDatasets = async () => {
-    try {
-      const items = await api.listDatasets();
-      setDatasets(items);
-      if (items.length > 0) {
-        setActiveDatasetId(items[0].dataset_id);
-      }
-    } catch (error) {
-      console.error(error);
-      setMessage(error instanceof Error ? error.message : 'Erro ao carregar datasets');
-    }
-  };
+  }, [user]);
 
   const loadLabels = async (datasetId: string) => {
     setIsBusy(true);
@@ -59,8 +42,8 @@ export default function Benchmarks() {
   };
 
   const handleSave = async () => {
-    if (!activeDatasetId || !queryText.trim() || !idealAnswer.trim()) {
-      setMessage('Preencha dataset, pergunta e resposta ideal.');
+    if (!queryText.trim() || !idealAnswer.trim()) {
+      setMessage('Preencha pergunta e resposta ideal.');
       return;
     }
 
@@ -115,16 +98,10 @@ export default function Benchmarks() {
         </div>
 
         <div className='rounded-xl border border-border p-4 space-y-4'>
-          <label className='text-sm font-medium'>Dataset</label>
-          <select
-            className='w-full bg-background border border-border rounded-md px-3 py-2 text-sm'
-            value={activeDatasetId}
-            onChange={(e) => setActiveDatasetId(e.target.value)}
-          >
-            {datasets.map((item) => (
-              <option key={item.dataset_id} value={item.dataset_id}>{item.name} ({item.dataset_id})</option>
-            ))}
-          </select>
+          <div className='space-y-1'>
+            <p className='text-sm font-medium'>Dataset padrao</p>
+            <p className='text-sm text-muted-foreground'>{activeDatasetId}</p>
+          </div>
 
           <div className='space-y-2'>
             <label className='text-sm font-medium'>Pergunta a avaliar</label>

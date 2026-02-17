@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import logging
+import re
 import time
 from dataclasses import replace
 from typing import Iterable, Sequence
 
 from application.dtos import (
     DocumentDTO,
+    SearchAlgorithmDetailsDTO,
     SearchComparisonDTO,
     SearchFileRequestDTO,
     SearchRequestDTO,
@@ -62,6 +64,7 @@ class SearchService:
             results=response.results,
             answer=response.answer,
             metrics=response.metrics,
+            algorithm_details=response.algorithm_details,
         )
 
     def comparar_por_texto(
@@ -138,6 +141,7 @@ class SearchService:
             results=response.results,
             answer=response.answer,
             metrics=response.metrics,
+            algorithm_details=response.algorithm_details,
         )
 
     def comparar_dataset_indexado(
@@ -193,15 +197,20 @@ class SearchService:
         mode: str = 'classical',
         top_k: int = 5,
         candidate_k: int = 20,
+        ideal_answer: str | None = None,
     ) -> SearchResponseDTO:
         docs = self._buscar_por_arquivo_use_case.execute(request.filename, request.content)
         if not docs:
             return SearchResponseDTO(query=request.query, mode=mode, results=[])
+
+        relevant_doc_ids = self._infer_relevant_doc_ids(docs, request.query, ideal_answer)
         return self.buscar_por_texto(
             SearchRequestDTO(query=request.query, documents=docs),
             mode=mode,
             top_k=top_k,
             candidate_k=candidate_k,
+            relevant_doc_ids=relevant_doc_ids,
+            ideal_answer=ideal_answer,
         )
 
     def comparar_por_arquivo(
@@ -209,14 +218,105 @@ class SearchService:
         request: SearchFileRequestDTO,
         top_k: int = 5,
         candidate_k: int = 20,
+        ideal_answer: str | None = None,
     ) -> SearchResponseDTO:
         docs = self._buscar_por_arquivo_use_case.execute(request.filename, request.content)
         if not docs:
             return SearchResponseDTO(query=request.query, mode='compare', results=[])
+
+        relevant_doc_ids = self._infer_relevant_doc_ids(docs, request.query, ideal_answer)
         return self.comparar_por_texto(
             SearchRequestDTO(query=request.query, documents=docs),
             top_k=top_k,
             candidate_k=candidate_k,
+            relevant_doc_ids=relevant_doc_ids,
+            ideal_answer=ideal_answer,
+        )
+
+    @staticmethod
+    def _infer_relevant_doc_ids(
+        documents: Sequence[DocumentDTO],
+        query_text: str,
+        ideal_answer: str | None,
+        limit: int = 3,
+    ) -> list[str]:
+        if not ideal_answer or not ideal_answer.strip():
+            return []
+
+        def tokenize(text: str) -> set[str]:
+            return {
+                token
+                for token in re.findall(r'[a-z0-9]+', text.lower())
+                if len(token) >= 3
+            }
+
+        query_tokens = tokenize(query_text)
+        answer_tokens = tokenize(ideal_answer)
+        if not query_tokens and not answer_tokens:
+            return []
+
+        scored: list[tuple[float, str]] = []
+        for item in documents:
+            doc_tokens = tokenize(item.text)
+            if not doc_tokens:
+                continue
+
+            query_overlap = len(doc_tokens & query_tokens) / max(1, len(query_tokens))
+            answer_overlap = len(doc_tokens & answer_tokens) / max(1, len(answer_tokens))
+            score = (0.3 * query_overlap) + (0.7 * answer_overlap)
+            if score <= 0:
+                continue
+            scored.append((score, item.doc_id))
+
+        scored.sort(key=lambda row: row[0], reverse=True)
+        return [doc_id for _, doc_id in scored[:limit]]
+
+    @staticmethod
+    def _build_algorithm_details(
+        mode: str,
+        candidate_k: int,
+        total_documents: int,
+        results: Sequence[SearchResult],
+    ) -> SearchAlgorithmDetailsDTO:
+        if mode != 'quantum':
+            return SearchAlgorithmDetailsDTO(
+                algorithm='classical',
+                comparator='cosine_similarity',
+                candidate_strategy='Avalia similaridade em todos os documentos',
+                description='Calcula similaridade coseno entre embedding da pergunta e embedding de cada documento.',
+                debug={
+                    'total_documents': int(total_documents),
+                    'rescored_count': int(len(results)),
+                },
+            )
+
+        traces = [item.quantum_trace for item in results if item.quantum_trace]
+        methods = sorted({str(trace.get('method')) for trace in traces if trace.get('method')})
+        used_projection = any(bool(trace.get('used_projection')) for trace in traces)
+        sample_trace = traces[0] if traces else {}
+        selected_candidates = max(1, min(candidate_k, total_documents)) if total_documents > 0 else 0
+
+        description = (
+            'Pre-seleciona candidatos pelo score classico e reordena com swap test quantico no PennyLane.'
+        )
+        if used_projection:
+            description += ' Como o embedding excede 64 dimensoes, ocorre projecao para simular o circuito.'
+
+        return SearchAlgorithmDetailsDTO(
+            algorithm='quantum',
+            comparator='swap_test (PennyLane)',
+            candidate_strategy=f'Pre-seleciona top-{selected_candidates} classico e reavalia com swap test',
+            description=description,
+            debug={
+                'methods': methods,
+                'used_projection': used_projection,
+                'total_documents': int(total_documents),
+                'selected_candidates': int(selected_candidates),
+                'rescored_count': int(len(results)),
+                'original_dim': sample_trace.get('original_dim'),
+                'prepared_dim': sample_trace.get('prepared_dim'),
+                'n_qubits': sample_trace.get('n_qubits'),
+            },
         )
 
     def _run_search(
@@ -235,7 +335,9 @@ class SearchService:
 
         if prepared_input is None:
             results: Sequence[SearchResult] = []
+            total_documents = 0
         else:
+            total_documents = len(prepared_input.documents)
             results = self._buscar_use_case.score(
                 query,
                 documents,
@@ -279,10 +381,18 @@ class SearchService:
             except Exception as exc:  # pragma: no cover - persistence must not break search
                 logger.warning('Failed to persist search trace: %s', exc)
 
+        algorithm_details = self._build_algorithm_details(
+            mode=mode,
+            candidate_k=candidate_k,
+            total_documents=total_documents,
+            results=results,
+        )
+
         response = SearchResponseLiteDTO(
             results=results_to_dtos(list(results)[:top_k]),
             answer=answer,
             metrics=metrics,
+            algorithm_details=algorithm_details,
         )
         return response, results
 

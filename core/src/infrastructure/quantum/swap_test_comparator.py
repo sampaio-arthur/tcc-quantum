@@ -8,35 +8,38 @@ from application.interfaces import QuantumComparator
 
 def _next_power_of_two(value: int) -> int:
     if value <= 0:
-        raise ValueError("Value must be positive")
+        raise ValueError('Value must be positive')
     power = 1
     while power < value:
         power *= 2
     return power
 
 
+def _project_vector(vector: np.ndarray, target_len: int) -> np.ndarray:
+    if target_len <= 0:
+        raise ValueError('Target length must be positive')
+    if vector.size == 0:
+        raise ValueError('Vector must be non-empty')
+    if vector.size == target_len:
+        return vector
+    source_positions = np.linspace(0.0, 1.0, num=vector.size, endpoint=True)
+    target_positions = np.linspace(0.0, 1.0, num=target_len, endpoint=True)
+    return np.interp(target_positions, source_positions, vector)
+
+
 def _pad_and_normalize(vector: np.ndarray, target_len: int) -> np.ndarray:
     if target_len <= 0:
-        raise ValueError("Target length must be positive")
+        raise ValueError('Target length must be positive')
     if vector.size == 0:
-        raise ValueError("Vector must be non-empty")
+        raise ValueError('Vector must be non-empty')
     if vector.size > target_len:
-        raise ValueError("Target length smaller than vector length")
+        vector = _project_vector(vector, target_len)
     if vector.size < target_len:
         vector = np.pad(vector, (0, target_len - vector.size))
     norm = np.linalg.norm(vector)
     if norm == 0:
-        raise ValueError("Vector norm is zero")
+        raise ValueError('Vector norm is zero')
     return vector / norm
-
-
-def _cosine_similarity(vec_a: np.ndarray, vec_b: np.ndarray) -> float:
-    norm_a = np.linalg.norm(vec_a)
-    norm_b = np.linalg.norm(vec_b)
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    score = float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
-    return float(np.clip(score, 0.0, 1.0))
 
 
 class SwapTestQuantumComparator(QuantumComparator):
@@ -56,30 +59,21 @@ class SwapTestQuantumComparator(QuantumComparator):
         vec_b = np.array(vector_b, dtype=float)
 
         if vec_a.size == 0 or vec_b.size == 0:
-            raise ValueError("Vectors must be non-empty")
+            raise ValueError('Vectors must be non-empty')
 
         original_dim = max(vec_a.size, vec_b.size)
+        projected = original_dim > self.MAX_QUANTUM_VECTOR_LEN
 
-        if original_dim > self.MAX_QUANTUM_VECTOR_LEN:
-            score = _cosine_similarity(vec_a, vec_b)
-            trace = {
-                'method': 'cosine_fallback',
-                'used_fallback': True,
-                'original_dim': int(original_dim),
-                'prepared_dim': int(original_dim),
-                'n_qubits': None,
-                'prob_zero': None,
-                'query_state': vec_a.tolist(),
-                'doc_state': vec_b.tolist(),
-            }
-            return score, trace
+        if projected:
+            vec_a = _project_vector(vec_a, self.MAX_QUANTUM_VECTOR_LEN)
+            vec_b = _project_vector(vec_b, self.MAX_QUANTUM_VECTOR_LEN)
 
-        target_len = _next_power_of_two(original_dim)
+        target_len = _next_power_of_two(max(vec_a.size, vec_b.size))
         vec_a = _pad_and_normalize(vec_a, target_len)
         vec_b = _pad_and_normalize(vec_b, target_len)
 
         n_qubits = int(np.log2(target_len))
-        dev = qml.device("default.qubit", wires=1 + 2 * n_qubits)
+        dev = qml.device('default.qubit', wires=1 + 2 * n_qubits)
 
         @qml.qnode(dev)
         def circuit() -> np.ndarray:
@@ -96,8 +90,9 @@ class SwapTestQuantumComparator(QuantumComparator):
         prob_zero = float(circuit()[0])
         similarity = float(np.clip(2 * prob_zero - 1, 0.0, 1.0))
         trace = {
-            'method': 'swap_test',
+            'method': 'swap_test_projected' if projected else 'swap_test',
             'used_fallback': False,
+            'used_projection': projected,
             'original_dim': int(original_dim),
             'prepared_dim': int(target_len),
             'n_qubits': int(n_qubits),

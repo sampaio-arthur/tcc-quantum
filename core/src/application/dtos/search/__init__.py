@@ -1,4 +1,5 @@
 from .search_dtos import (
+    SearchAlgorithmDetailsDTO,
     SearchComparisonDTO,
     SearchFileRequestDTO,
     SearchMetricsDTO,
@@ -9,11 +10,12 @@ from .search_dtos import (
 )
 
 __all__ = [
-    "SearchRequestDTO",
-    "SearchFileRequestDTO",
-    "SearchResultDTO",
-    "SearchMetricsDTO",
-    "SearchResponseLiteDTO",
-    "SearchComparisonDTO",
-    "SearchResponseDTO",
+    'SearchRequestDTO',
+    'SearchFileRequestDTO',
+    'SearchResultDTO',
+    'SearchMetricsDTO',
+    'SearchAlgorithmDetailsDTO',
+    'SearchResponseLiteDTO',
+    'SearchComparisonDTO',
+    'SearchResponseDTO',
 ]

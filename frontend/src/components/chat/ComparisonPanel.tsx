@@ -1,4 +1,4 @@
-import { SearchMetrics, SearchResponse } from '@/lib/api';
+import { SearchAlgorithmDetails, SearchMetrics, SearchResponse } from '@/lib/api';
 
 interface ComparisonPanelProps {
   response: SearchResponse | null;
@@ -81,6 +81,30 @@ function MetricsSummary({ title, metrics }: { title: string; metrics?: SearchMet
   );
 }
 
+function AlgorithmSummary({ title, details }: { title: string; details?: SearchAlgorithmDetails }) {
+  if (!details) {
+    return (
+      <div className='rounded-xl border border-border bg-card p-4'>
+        <p className='text-sm font-medium'>{title}</p>
+        <p className='text-xs text-muted-foreground mt-2'>Detalhes do algoritmo nao disponiveis.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+      <p className='text-sm font-medium'>{title}</p>
+      <div className='text-xs text-muted-foreground'>
+        <span className='text-foreground'>Comparador:</span> {details.comparator}
+      </div>
+      <div className='text-xs text-muted-foreground'>
+        <span className='text-foreground'>Candidatos:</span> {details.candidate_strategy}
+      </div>
+      <p className='text-xs text-muted-foreground'>{details.description}</p>
+    </div>
+  );
+}
+
 export function ComparisonPanel({ response }: ComparisonPanelProps) {
   if (!response) return null;
 
@@ -110,6 +134,15 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
           </div>
         ) : (
           <MetricsSummary title='Resultado' metrics={response.metrics} />
+        )}
+
+        {showComparison ? (
+          <div className='grid gap-3 md:grid-cols-2'>
+            <AlgorithmSummary title='Como funciona: Classico' details={comparison?.classical.algorithm_details} />
+            <AlgorithmSummary title='Como funciona: Quantico' details={comparison?.quantum.algorithm_details} />
+          </div>
+        ) : (
+          <AlgorithmSummary title='Como funciona' details={response.algorithm_details} />
         )}
 
         {showComparison && (hasLabels || hasIdealAnswer) && (

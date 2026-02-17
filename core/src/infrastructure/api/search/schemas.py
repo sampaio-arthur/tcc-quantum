@@ -52,10 +52,19 @@ class SearchMetricsOut(BaseModel):
     has_labels: bool
 
 
+class SearchAlgorithmDetailsOut(BaseModel):
+    algorithm: str
+    comparator: str
+    candidate_strategy: str
+    description: str
+    debug: Optional[dict] = None
+
+
 class SearchResponseLite(BaseModel):
     results: List[SearchResultOut]
     answer: Optional[str] = None
     metrics: Optional[SearchMetricsOut] = None
+    algorithm_details: Optional[SearchAlgorithmDetailsOut] = None
 
 
 class SearchComparisonOut(BaseModel):
@@ -70,3 +79,4 @@ class SearchResponse(BaseModel):
     answer: Optional[str] = None
     metrics: Optional[SearchMetricsOut] = None
     comparison: Optional[SearchComparisonOut] = None
+    algorithm_details: Optional[SearchAlgorithmDetailsOut] = None
