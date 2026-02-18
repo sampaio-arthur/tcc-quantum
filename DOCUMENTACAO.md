@@ -62,6 +62,45 @@ Dimensionalidade quantica
 - Vetores maiores sao projetados para 64 antes do circuito.
 - O retorno inclui debug com method, used_projection e n_qubits.
 
+Custo de vetores (embeddings)
+
+Pipeline de custo
+1) PDF/TXT -> extracao de texto.
+2) Chunking -> gera n_chunks.
+3) Embedding -> custo por chamada (API ou local).
+4) Armazenamento vetorial -> custo de RAM/disco e indices.
+5) Busca -> custo de CPU/latencia (ex.: HNSW vs full scan).
+
+Estimativas basicas
+- Tokens ~= caracteres / 4 (regra pratica).
+- n_chunks ~= tokens / (chunk_size - overlap).
+- Vetores (float32): tamanho_bytes ~= n_chunks x dimensao x 4.
+- Armazenamento real com metadados e indices tende a 1.3x a 1.8x do tamanho bruto.
+
+Exemplo rapido (768 dims)
+- 10.000 chunks x 768 x 4 bytes ~= 30,7 MB (so vetores).
+- Com overhead de indices e metadados: ~40-55 MB.
+
+Exemplo pratico com chunking atual (max_chars=800, overlap=150)
+- Passo efetivo ~= 650 chars por chunk.
+
+| Tamanho do texto | n_chunks (aprox) | Vetores (768D) | Vetores + overhead |
+| --- | --- | --- | --- |
+| 50 KB | 79 | ~0,23 MB | ~0,30-0,41 MB |
+| 500 KB | 788 | ~2,31 MB | ~3,0-4,2 MB |
+| 1 MB | 1.614 | ~4,73 MB | ~6,1-8,5 MB |
+| 5 MB | 8.066 | ~23,6 MB | ~30-43 MB |
+
+Custos diretos
+- Geracao (API paga): custo = embeddings x preco_por_embedding.
+- Armazenamento: custo mensal do Postgres/pgvector conforme GB.
+- Busca: depende de indice (HNSW reduz latencia e CPU; full scan custa mais em CPU).
+
+Boas praticas de custo
+- Cache de embeddings para evitar recomputar.
+- Ajustar chunk_size/overlap conforme recall vs custo.
+- Monitorar n_chunks por documento para evitar explodir o custo.
+
 Busca por arquivo
 
 Entrada
