@@ -116,7 +116,9 @@ def _metrics_to_schema(metrics):
         return None
     return {
         'accuracy_at_k': metrics.accuracy_at_k,
+        'precision_at_k': metrics.precision_at_k,
         'recall_at_k': metrics.recall_at_k,
+        'f1_at_k': metrics.f1_at_k,
         'mrr': metrics.mrr,
         'ndcg_at_k': metrics.ndcg_at_k,
         'answer_similarity': metrics.answer_similarity,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from typing import Iterable, Sequence
 
 from application.dtos import (
@@ -370,6 +370,7 @@ class SearchService:
 
         if self._trace_repository and prepared_input:
             try:
+                metrics_payload = asdict(metrics) if metrics is not None else None
                 self._trace_repository.persist_run(
                     query=query,
                     mode=mode,
@@ -377,6 +378,7 @@ class SearchService:
                     candidate_k=candidate_k,
                     prepared=prepared_input,
                     results=list(results),
+                    metrics=metrics_payload,
                 )
             except Exception as exc:  # pragma: no cover - persistence must not break search
                 logger.warning('Failed to persist search trace: %s', exc)

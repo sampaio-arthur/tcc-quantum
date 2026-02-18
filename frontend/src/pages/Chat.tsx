@@ -132,8 +132,8 @@ export default function Chat() {
 
     return [
       'Comparacao de acuracia (pipeline):',
-      'Classico  - Accuracy@' + classical.k + ': ' + formatPct(classical.accuracy_at_k) + ' | Recall@' + classical.k + ': ' + formatPct(classical.recall_at_k) + ' | MRR: ' + formatPct(classical.mrr) + ' | NDCG@' + classical.k + ': ' + formatPct(classical.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(classical.answer_similarity),
-      'Quantico  - Accuracy@' + quantum.k + ': ' + formatPct(quantum.accuracy_at_k) + ' | Recall@' + quantum.k + ': ' + formatPct(quantum.recall_at_k) + ' | MRR: ' + formatPct(quantum.mrr) + ' | NDCG@' + quantum.k + ': ' + formatPct(quantum.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(quantum.answer_similarity),
+      'Classico  - Accuracy@' + classical.k + ': ' + formatPct(classical.accuracy_at_k) + ' | Precision@' + classical.k + ': ' + formatPct(classical.precision_at_k) + ' | Recall@' + classical.k + ': ' + formatPct(classical.recall_at_k) + ' | F1@' + classical.k + ': ' + formatPct(classical.f1_at_k) + ' | MRR: ' + formatPct(classical.mrr) + ' | NDCG@' + classical.k + ': ' + formatPct(classical.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(classical.answer_similarity),
+      'Quantico  - Accuracy@' + quantum.k + ': ' + formatPct(quantum.accuracy_at_k) + ' | Precision@' + quantum.k + ': ' + formatPct(quantum.precision_at_k) + ' | Recall@' + quantum.k + ': ' + formatPct(quantum.recall_at_k) + ' | F1@' + quantum.k + ': ' + formatPct(quantum.f1_at_k) + ' | MRR: ' + formatPct(quantum.mrr) + ' | NDCG@' + quantum.k + ': ' + formatPct(quantum.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(quantum.answer_similarity),
     ].join('\n');
   };
   const handleSendMessage = async (payload: SendPayload) => {

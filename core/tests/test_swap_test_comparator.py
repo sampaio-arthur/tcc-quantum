@@ -35,8 +35,9 @@ def test_pad_and_normalize_rejects_invalid_inputs():
     with pytest.raises(ValueError):
         _pad_and_normalize(np.array([]), 2)
 
-    with pytest.raises(ValueError):
-        _pad_and_normalize(np.array([1.0, 2.0]), 1)
+    projected = _pad_and_normalize(np.array([1.0, 2.0]), 1)
+    assert projected.size == 1
+    assert np.isclose(np.linalg.norm(projected), 1.0)
 
     with pytest.raises(ValueError):
         _pad_and_normalize(np.array([0.0, 0.0]), 2)

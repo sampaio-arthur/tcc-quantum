@@ -43,6 +43,7 @@ class SearchTraceRepository:
         candidate_k: int,
         prepared: PreparedSearchInput,
         results: list[SearchResult],
+        metrics: dict[str, float | int | bool | None] | None = None,
     ) -> None:
         run = SearchRun(
             query=query,
@@ -83,6 +84,15 @@ class SearchTraceRepository:
                         'dimension': len(vector_list),
                     },
                     text_excerpt=doc.text[:500],
+                )
+            )
+
+        if metrics is not None:
+            self._db.add(
+                SearchVectorRecord(
+                    run_id=run.id,
+                    kind='metrics',
+                    payload=metrics,
                 )
             )
 

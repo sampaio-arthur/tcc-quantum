@@ -41,7 +41,9 @@ class SearchResultOut(BaseModel):
 
 class SearchMetricsOut(BaseModel):
     accuracy_at_k: Optional[float] = None
+    precision_at_k: Optional[float] = None
     recall_at_k: Optional[float] = None
+    f1_at_k: Optional[float] = None
     mrr: Optional[float] = None
     ndcg_at_k: Optional[float] = None
     answer_similarity: Optional[float] = None

@@ -31,9 +31,14 @@ class PdfTxtDocumentTextExtractor(DocumentTextExtractor):
             raise HTTPException(status_code=400, detail="PDF invalido")
         try:
             reader = PdfReader(io.BytesIO(content))
+            # Se o PDF está encriptado, tenta descriptografar com senha vazia
+            if reader.is_encrypted:
+                reader.decrypt("")
+            pages = [page.extract_text() or "" for page in reader.pages]
         except PdfReadError as exc:
             raise HTTPException(status_code=400, detail="PDF invalido") from exc
-        pages = [page.extract_text() or "" for page in reader.pages]
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Erro ao processar PDF: {str(exc)}") from exc
         text = "\n".join(pages).strip()
         if not text:
             raise HTTPException(status_code=400, detail="PDF sem texto extraivel")

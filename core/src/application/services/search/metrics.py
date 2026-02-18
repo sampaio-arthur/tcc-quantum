@@ -16,7 +16,9 @@ def compute_ranking_metrics(
     has_labels = len(relevant_set) > 0
 
     accuracy_at_k = None
+    precision_at_k = None
     recall_at_k = None
+    f1_at_k = None
     mrr = None
     ndcg_at_k = None
 
@@ -26,7 +28,13 @@ def compute_ranking_metrics(
         hit_count = len(hits)
 
         accuracy_at_k = 1.0 if hit_count > 0 else 0.0
+        precision_at_k = hit_count / len(top_k) if top_k else 0.0
         recall_at_k = hit_count / len(relevant_set)
+
+        if precision_at_k + recall_at_k > 0:
+            f1_at_k = 2 * (precision_at_k * recall_at_k) / (precision_at_k + recall_at_k)
+        else:
+            f1_at_k = 0.0
 
         mrr = 0.0
         for index, item in enumerate(results, start=1):
@@ -42,7 +50,9 @@ def compute_ranking_metrics(
 
     return SearchMetricsDTO(
         accuracy_at_k=accuracy_at_k,
+        precision_at_k=precision_at_k,
         recall_at_k=recall_at_k,
+        f1_at_k=f1_at_k,
         mrr=mrr,
         ndcg_at_k=ndcg_at_k,
         answer_similarity=None,

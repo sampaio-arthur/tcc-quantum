@@ -27,7 +27,9 @@ class SearchResultDTO:
 @dataclass(frozen=True)
 class SearchMetricsDTO:
     accuracy_at_k: Optional[float]
+    precision_at_k: Optional[float]
     recall_at_k: Optional[float]
+    f1_at_k: Optional[float]
     mrr: Optional[float]
     ndcg_at_k: Optional[float]
     answer_similarity: Optional[float]

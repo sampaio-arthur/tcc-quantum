@@ -20,6 +20,8 @@ def test_metrics_include_accuracy_at_k_with_labels():
 
     assert metrics.has_labels is True
     assert metrics.accuracy_at_k == 0.0
+    assert metrics.precision_at_k == 0.0
+    assert metrics.f1_at_k == 0.0
 
     metrics_k2 = compute_ranking_metrics(
         results=results,
@@ -30,4 +32,6 @@ def test_metrics_include_accuracy_at_k_with_labels():
     )
 
     assert metrics_k2.accuracy_at_k == 1.0
+    assert metrics_k2.precision_at_k == 0.5
     assert metrics_k2.recall_at_k == 1.0
+    assert abs(metrics_k2.f1_at_k - (2 / 3)) < 1e-6
