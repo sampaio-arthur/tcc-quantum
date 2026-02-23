@@ -78,6 +78,7 @@ export interface SearchMetrics {
   k: number;
   candidate_k: number;
   has_labels: boolean;
+  debug?: Record<string, unknown> | null;
 }
 
 export interface SearchAlgorithmDetails {
@@ -107,6 +108,14 @@ export interface SearchResponse {
   answer?: string;
   metrics?: SearchMetrics;
   comparison?: SearchComparison;
+  comparison_metrics?: {
+    top_k: number;
+    overlap_at_k: number;
+    jaccard_at_k: number;
+    common_doc_ids: string[];
+    classical_mean_score: number;
+    quantum_mean_score: number;
+  };
   algorithm_details?: SearchAlgorithmDetails;
 }
 
@@ -270,28 +279,6 @@ class ApiClient {
 
     if (!response.ok) {
       throw new Error('Erro ao enviar mensagem');
-    }
-
-    return response.json();
-  }
-
-  async searchWithFile(query: string, file: File): Promise<SearchResponse> {
-    const formData = new FormData();
-    formData.append('query', query);
-    formData.append('file', file);
-    formData.append('mode', 'compare');
-
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/file`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.getToken()}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const detail = await this.readErrorDetail(response, 'Erro na busca');
-      throw new Error(detail);
     }
 
     return response.json();

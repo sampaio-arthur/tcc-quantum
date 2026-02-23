@@ -1,5 +1,4 @@
-import { Plus, MessageSquare, ChevronLeft, LogOut, Trash2, ClipboardList } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, MessageSquare, ChevronLeft, LogOut, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -27,7 +26,6 @@ export function ChatSidebar({
   onToggleCollapse,
 }: ChatSidebarProps) {
   const { user, logout } = useAuth();
-  const navigate = useNavigate();
 
   const getUserInitials = (email: string) => {
     return email.substring(0, 2).toUpperCase();
@@ -68,14 +66,6 @@ export function ChatSidebar({
         >
           <Plus className='h-4 w-4' />
           Novo chat
-        </Button>
-        <Button
-          onClick={() => navigate('/benchmarks')}
-          variant='ghost'
-          className='w-full justify-start gap-3 text-sidebar-foreground hover:bg-sidebar-accent'
-        >
-          <ClipboardList className='h-4 w-4' />
-          Gabaritos
         </Button>
       </div>
 

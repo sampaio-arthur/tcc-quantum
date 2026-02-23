@@ -1,175 +1,118 @@
-Quantum Search (TCC)
+# TCC - Comparative Semantic Retrieval (Classical vs Quantum-Inspired)
 
-Visao geral
-- Quantum Search compara dois caminhos de recuperacao no mesmo conjunto de dados.
-- Caminho classico: similaridade cosseno sobre embeddings.
-- Caminho quantico-inspirado: pre-selecao classica e reordenacao com swap test em PennyLane.
-- A plataforma mede qualidade de ranking e qualidade de resposta usando gabaritos.
+Backend FastAPI com Clean Architecture para comparar retrieval semântico entre dois pipelines:
 
-Objetivo do projeto
-- Avaliar se a arquitetura quantico-inspirada melhora a acuracia em relacao ao caminho classico.
-- Medir desempenho com metrica auxiliar de latencia.
+- Clássico (`sBERT`) -> `documents.embedding_vector`
+- Quântico-inspirado (`PennyLane`) -> `documents.quantum_vector`
 
-O que a aplicacao faz passo a passo
-1) Carrega datasets de core/data/public_datasets.json.
-2) Indexa documentos em embeddings e persiste no banco para reuso.
-3) Recebe pergunta do usuario.
-4) Executa busca classica e quantica no modo compare.
-5) Compara com gabarito salvo quando houver.
-6) Calcula metricas de ranking e similaridade de resposta.
-7) Retorna detalhes tecnicos do algoritmo usado.
+O projeto também inclui autenticação JWT, chats salvos (estilo GPT, sem LLM) e avaliação por métricas de IR.
 
-Fluxo de indexacao
-- Endpoint: POST /search/dataset/index.
-- Leitura de documentos do dataset selecionado.
-- Geracao de embedding por documento.
-- Persistencia em dataset_document_index.
-- Reuso do indice quando provider e model de embedding forem os mesmos.
+## Status
 
-Fluxo de gabarito
-- Tela de Benchmarks recebe pergunta e resposta ideal.
-- Backend infere relevant_doc_ids automaticamente.
-- Persistencia na tabela benchmark_ground_truths.
-- Na interface atual, Benchmarks usa dataset padrao mini-rag.
+- Backend `core/` implementado do zero (estrutura em camadas + persistência + API)
+- Rotas compatíveis com o front legado mantidas
+- Rotas finais `/api/*` documentadas
 
-Fluxo de busca em dataset
-- Endpoint: POST /search/dataset.
-- Entrada aceita query ou query_id.
-- Resolve relevant_doc_ids e ideal_answer por benchmark salvo quando existir.
-- Executa comparacao classica e quantica.
-- Retorna resultados, metricas e algorithm_details.
+## Árvore do Projeto
 
-Fluxo de busca por arquivo
-- Endpoint: POST /search/file.
-- Suporta TXT e PDF.
-- Extrai texto e quebra em chunks com overlap.
-- Busca sobre chunks.
-- Se houver gabarito para a pergunta no dataset padrao, calcula metricas com ideal_answer.
+```text
+.
+├── core/
+│   ├── alembic/
+│   ├── src/
+│   │   ├── application/
+│   │   ├── domain/
+│   │   └── infrastructure/
+│   │       ├── api/
+│   │       ├── datasets/
+│   │       ├── db/
+│   │       ├── encoders/
+│   │       ├── email/
+│   │       ├── metrics/
+│   │       ├── repositories/
+│   │       └── security/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── pytest.ini
+│   └── requirements.txt
+├── frontend/
+├── API.md
+├── ARCHITECTURE.md
+├── METHODS.md
+├── DB_SCHEMA.md
+├── EVALUATION.md
+├── DEPENDENCIES.md
+├── CHANGELOG.md
+└── ROUTES_COMPAT.md
+```
 
-Fallback
-- Quando relevancia e baixa, answer retorna Nao foi possivel consultar.
-- Limiar configuravel por SEARCH_MIN_RELEVANCE_SCORE.
+## Execução
 
-Metricas retornadas
-- accuracy_at_k
-- recall_at_k
-- mrr
-- ndcg_at_k
-- answer_similarity
-- latency_ms
-- has_labels
-- has_ideal_answer
-- k
-- candidate_k
+### Docker
 
-Detalhes de algoritmo retornados
-- algorithm
-- comparator
-- candidate_strategy
-- description
-- debug
+```bash
+docker compose up --build
+```
 
-Tecnologias e bibliotecas
-Backend
-- Python 3
-- FastAPI
-- Uvicorn
-- SQLAlchemy
-- PostgreSQL com pgvector
-- NumPy, SciPy, pandas, scikit-learn
-- PennyLane
-- Qiskit, Qiskit Aer
-- pypdf
-- python-jose
-- passlib e bcrypt
-- pytest
+- Backend: `http://localhost:8000`
+- Frontend: `http://localhost:5173`
+- PostgreSQL/pgvector: `localhost:5432`
 
-Frontend
-- React 18
-- TypeScript
-- Vite
-- React Router
-- Tailwind CSS
-- Radix UI
-- TanStack React Query
-- Vitest e Testing Library
+### Local (backend)
 
-Infra
-- Docker Compose
-- Servicos: core, frontend, db
+```bash
+cd core
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn infrastructure.api.fastapi_app:app --host 0.0.0.0 --port 8000 --app-dir src
+```
 
-Persistencia principal
-- users
-- conversations
-- messages
-- dataset_document_index
-- benchmark_ground_truths
-- search_runs
-- search_vector_records
+## Reuters (reprodutível)
 
-Como executar
-Via Make
-- make setup
-- make up
-- make down
-- make logs
-- make test
+- Provider: `nltk.corpus.reuters`
+- Download automático tentado pelo backend (`nltk.download("reuters")`)
+- Fallback pequeno local incluído para dev/teste se o corpus não estiver disponível
 
-Via Docker Compose
-- docker compose build
-- docker compose up -d
+## Fluxo principal (mínimo)
 
-URLs locais
-- backend: http://localhost:8000
-- frontend: http://localhost:5173
-- health: http://localhost:8000/health
+1. `POST /auth/register` (compat) ou `POST /api/auth/signup`
+2. `POST /auth/login` (compat) ou `POST /api/auth/login`
+3. `POST /api/index` para indexar `reuters`
+4. `POST /api/chats` para criar conversa
+5. `POST /api/search` com `chat_id` para persistir mensagem do assistant (resultado estruturado)
+6. `POST /api/ground-truth`
+7. `POST /api/evaluate`
 
-Variaveis de ambiente
-Arquivo base: .env.example
+## Frontend e CORS
 
-App
-- APP_ENV
+O front legado usa `VITE_API_BASE_URL=http://localhost:8000` e chama rotas sem prefixo `/api`.
 
-Seguranca
-- SECRET_KEY
-- JWT_SECRET
-- JWT_ALGORITHM
-- ACCESS_TOKEN_EXPIRE_MINUTES
+Este backend expõe:
 
-Banco
-- DB_HOST
-- DB_PORT
-- DB_NAME
-- DB_USER
-- DB_PASSWORD
-- DATABASE_URL
+- Rotas finais: `/api/*`
+- Rotas compatíveis: `/auth/*`, `/conversations`, `/search/*`, `/datasets`, `/benchmarks/labels`
 
-Frontend
-- VITE_API_BASE_URL
+Ver `ROUTES_COMPAT.md`.
 
-Embeddings
-- EMBEDDER_PROVIDER
-- GEMINI_API_KEY
-- GEMINI_EMBEDDING_MODEL
+## Testes
 
-Variaveis funcionais importantes
-- DEFAULT_DATASET_ID
-- SEARCH_MIN_RELEVANCE_SCORE
+Teste de fluxo: `core/tests/test_api_flow.py`
 
-Procedimento recomendado de uso
-1) Registrar usuario.
-2) Autenticar e abrir chat.
-3) Cadastrar gabaritos em Benchmarks.
-4) Indexar dataset.
-5) Executar consultas em compare.
-6) Avaliar metricas e detalhes do algoritmo.
-7) Repetir com novas perguntas e novos arquivos.
+```bash
+cd core
+pytest -q
+```
 
-Observacoes operacionais
-- Rate limit de busca: 10 requisicoes por minuto por host.
-- Upload maximo em busca por arquivo: 5 MB.
-- CORS aberto para todos os origins no estado atual.
+Observação: no ambiente desta sessão, faltaram algumas dependências Python para executar a suíte completa (`pydantic_settings`, etc.).
 
-Arquivos complementares
-- API.md
-- DOCUMENTACAO.md
+## Documentação
+
+- `ARCHITECTURE.md`
+- `API.md`
+- `METHODS.md`
+- `DB_SCHEMA.md`
+- `EVALUATION.md`
+- `DEPENDENCIES.md`
+- `ROUTES_COMPAT.md`
+- `CHANGELOG.md`

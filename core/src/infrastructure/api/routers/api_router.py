@@ -1,0 +1,391 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.security import OAuth2PasswordRequestForm
+
+from domain.entities import Document, SearchResult
+from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
+from infrastructure.api.deps import Services, get_current_user_id, get_services
+from infrastructure.api.schemas import (
+    BenchmarkLabelInput,
+    ChatCreateRequest,
+    ChatDetailOut,
+    ChatMessageCreateRequest,
+    ChatMessageOut,
+    ChatOut,
+    ChatRenameRequest,
+    EvaluateRequest,
+    ForgotPasswordRequest,
+    GroundTruthUpsertRequest,
+    IndexRequest,
+    RefreshTokenRequest,
+    ResetPasswordRequest,
+    SearchRequest,
+    SignUpRequest,
+    TokenOut,
+    UserOut,
+)
+
+
+router = APIRouter(prefix="/api")
+compat_router = APIRouter()
+
+
+def _serialize_dt(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
+
+
+def _user_out(user) -> UserOut:
+    return UserOut(id=user.id, email=user.email, created_at=_serialize_dt(user.created_at))
+
+
+def _chat_out(chat) -> ChatOut:
+    return ChatOut(id=chat.id, title=chat.title, created_at=_serialize_dt(chat.created_at))
+
+
+def _msg_out(msg) -> ChatMessageOut:
+    return ChatMessageOut(id=msg.id, role=msg.role.value if hasattr(msg.role, "value") else str(msg.role), content=msg.content, created_at=_serialize_dt(msg.created_at))
+
+
+def _serialize_results(results: list[SearchResult]) -> list[dict]:
+    return [{"doc_id": r.doc_id, "text": r.text, "score": r.score} for r in results]
+
+
+def _handle_domain_error(exc: DomainError) -> HTTPException:
+    if isinstance(exc, ConflictError):
+        return HTTPException(status_code=409, detail=str(exc))
+    if isinstance(exc, UnauthorizedError):
+        return HTTPException(status_code=401, detail=str(exc))
+    if isinstance(exc, NotFoundError):
+        return HTTPException(status_code=404, detail=str(exc))
+    if isinstance(exc, ValidationError):
+        return HTTPException(status_code=400, detail=str(exc))
+    return HTTPException(status_code=500, detail="Internal error")
+
+
+@router.get("/health")
+def api_health() -> dict:
+    return {"status": "ok"}
+
+
+@compat_router.get("/health")
+def compat_health() -> dict:
+    return api_health()
+
+
+@router.post("/auth/signup", response_model=UserOut, status_code=201)
+def sign_up(payload: SignUpRequest, services: Services = Depends(get_services)):
+    try:
+        return _user_out(services.sign_up.execute(payload.email, payload.password, payload.name))
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/auth/register", response_model=UserOut, status_code=201)
+def register_compat(payload: SignUpRequest, services: Services = Depends(get_services)):
+    return sign_up(payload, services)
+
+
+@router.post("/auth/login", response_model=TokenOut)
+def login_api(form: OAuth2PasswordRequestForm = Depends(), services: Services = Depends(get_services)):
+    try:
+        return services.sign_in.execute(form.username, form.password)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/auth/login", response_model=TokenOut)
+def login_compat(form: OAuth2PasswordRequestForm = Depends(), services: Services = Depends(get_services)):
+    return login_api(form, services)
+
+
+@router.get("/auth/me", response_model=UserOut)
+@compat_router.get("/auth/me", response_model=UserOut)
+def me(user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    user = services.users.get_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _user_out(user)
+
+
+@router.post("/auth/forgot-password")
+def forgot_password(payload: ForgotPasswordRequest, services: Services = Depends(get_services)):
+    services.request_reset.execute(payload.email)
+    return {"detail": "If the email exists, a reset token has been generated."}
+
+
+@router.post("/auth/reset-password")
+def reset_password(payload: ResetPasswordRequest, services: Services = Depends(get_services)):
+    try:
+        services.confirm_reset.execute(payload.token, payload.new_password)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+    return {"detail": "Password updated."}
+
+
+@router.post("/auth/refresh", response_model=TokenOut)
+def refresh_token(payload: RefreshTokenRequest, services: Services = Depends(get_services)):
+    try:
+        return services.refresh.execute(payload.refresh_token)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@router.post("/chats", response_model=ChatOut, status_code=201)
+def create_chat(payload: ChatCreateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        return _chat_out(services.create_chat.execute(user_id, payload.title))
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/conversations", response_model=ChatOut, status_code=201)
+def compat_create_conversation(payload: ChatCreateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return create_chat(payload, user_id, services)
+
+
+@router.get("/chats", response_model=list[ChatOut])
+def list_chats(
+    page: int = 1,
+    page_size: int = 20,
+    user_id: int = Depends(get_current_user_id),
+    services: Services = Depends(get_services),
+):
+    return [_chat_out(x) for x in services.list_chats.execute(user_id, page, page_size)]
+
+
+@compat_router.get("/conversations", response_model=list[ChatOut])
+def compat_list_conversations(user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return list_chats(1, 50, user_id, services)
+
+
+@router.get("/chats/{chat_id}", response_model=ChatDetailOut)
+def get_chat(chat_id: int, page: int = 1, page_size: int = 200, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        chat, messages = services.get_chat.execute(user_id, chat_id, page, page_size)
+        return ChatDetailOut(id=chat.id or 0, title=chat.title, created_at=_serialize_dt(chat.created_at), messages=[_msg_out(m) for m in messages])
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.get("/conversations/{chat_id}", response_model=ChatDetailOut)
+def compat_get_conversation(chat_id: int, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return get_chat(chat_id, 1, 500, user_id, services)
+
+
+@router.post("/chats/{chat_id}/messages", response_model=ChatMessageOut, status_code=201)
+def add_message(chat_id: int, payload: ChatMessageCreateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        msg = services.add_message.execute(user_id, chat_id, payload.role, payload.content)
+        return _msg_out(msg)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/conversations/{chat_id}/messages", response_model=ChatMessageOut, status_code=201)
+def compat_add_message(chat_id: int, payload: ChatMessageCreateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return add_message(chat_id, payload, user_id, services)
+
+
+@router.patch("/chats/{chat_id}", response_model=ChatOut)
+def rename_chat(chat_id: int, payload: ChatRenameRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        return _chat_out(services.rename_chat.execute(user_id, chat_id, payload.title))
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.patch("/conversations/{chat_id}", response_model=ChatOut)
+def compat_rename_conversation(chat_id: int, payload: ChatRenameRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return rename_chat(chat_id, payload, user_id, services)
+
+
+@router.delete("/chats/{chat_id}", status_code=204)
+def delete_chat(chat_id: int, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        services.delete_chat.execute(user_id, chat_id)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.delete("/conversations/{chat_id}", status_code=204)
+def compat_delete_conversation(chat_id: int, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return delete_chat(chat_id, user_id, services)
+
+
+@router.post("/index")
+def index_dataset(payload: IndexRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    user = services.users.get_by_id(user_id)
+    if services.settings.require_admin_for_indexing and not (user and user.is_admin):
+        raise HTTPException(status_code=403, detail="Admin required")
+    try:
+        return services.index_dataset.execute(payload.dataset_id)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/search/dataset/index")
+def compat_index_dataset(payload: IndexRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return index_dataset(payload, user_id, services)
+
+
+def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Services) -> dict:
+    result = services.search.execute(dataset=payload.dataset_id, query=payload.query, mode=payload.mode, top_k=payload.top_k)
+    output: dict[str, Any] = {
+        "query": result["query"],
+        "mode": result["mode"],
+        "results": _serialize_results(result["results"]),
+    }
+    if result.get("metrics") is not None:
+        output["metrics"] = result["metrics"]
+    if result.get("algorithm_details") is not None:
+        output["algorithm_details"] = result["algorithm_details"]
+    if "comparison" in result:
+        output["comparison"] = {
+            "classical": {
+                "results": _serialize_results(result["comparison"]["classical"]["results"]),
+                "metrics": result["comparison"]["classical"].get("metrics"),
+                "algorithm_details": result["comparison"]["classical"].get("algorithm_details"),
+            },
+            "quantum": {
+                "results": _serialize_results(result["comparison"]["quantum"]["results"]),
+                "metrics": result["comparison"]["quantum"].get("metrics"),
+                "algorithm_details": result["comparison"]["quantum"].get("algorithm_details"),
+            },
+        }
+    if result.get("comparison_metrics") is not None:
+        output["comparison_metrics"] = result["comparison_metrics"]
+    if payload.chat_id is not None:
+        assistant_payload = services.build_assistant_message.execute(result)
+        services.add_message.save_assistant_retrieval_result(user_id, payload.chat_id, assistant_payload)
+        output["chat_persisted"] = True
+    return output
+
+
+@router.post("/search")
+def search(payload: SearchRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        return _search_and_maybe_persist(payload, user_id, services)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.post("/search/dataset")
+def compat_search_dataset(payload: SearchRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    return search(payload, user_id, services)
+
+
+@compat_router.post("/search/file")
+async def compat_search_file(
+    query: str = Form(...),
+    mode: str = Form("compare"),
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_current_user_id),
+    services: Services = Depends(get_services),
+):
+    raise HTTPException(
+        status_code=410,
+        detail="File attachments/search by file were removed. Use dataset-backed chat search via /search/dataset or /api/search.",
+    )
+
+
+@router.post("/ground-truth")
+def upsert_ground_truth(payload: GroundTruthUpsertRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        item = services.upsert_ground_truth.execute(payload.dataset_id, payload.query_id, payload.query_text, payload.relevant_doc_ids, user_id)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+    return {
+        "dataset_id": item.dataset,
+        "query_id": item.query_id,
+        "query_text": item.query_text,
+        "relevant_doc_ids": item.relevant_doc_ids,
+    }
+
+
+@router.post("/evaluate")
+def evaluate(payload: EvaluateRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    try:
+        return services.evaluate.execute(payload.dataset_id, payload.pipeline, payload.k)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
+@compat_router.get("/datasets")
+def list_datasets(services: Services = Depends(get_services)):
+    provider = services.index_dataset.datasets
+    datasets = provider.list_datasets()
+    return [
+        {
+            "dataset_id": d["dataset_id"],
+            "name": d["name"],
+            "description": d["description"],
+            "document_count": d["document_count"],
+            "query_count": d["query_count"],
+        }
+        for d in datasets
+    ]
+
+
+@compat_router.get("/datasets/{dataset_id}")
+def get_dataset(dataset_id: str, services: Services = Depends(get_services)):
+    provider = services.index_dataset.datasets
+    dataset = provider.get_dataset(dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=404, detail="Dataset not found")
+    return dataset
+
+
+@compat_router.get("/benchmarks/labels")
+def list_benchmark_labels(dataset_id: str, services: Services = Depends(get_services)):
+    items = services.ground_truths.list_by_dataset(dataset_id)
+    return {
+        "items": [
+            {
+                "benchmark_id": item.query_id,
+                "dataset_id": item.dataset,
+                "query_text": item.query_text,
+                "ideal_answer": "",
+                "relevant_doc_ids": item.relevant_doc_ids,
+            }
+            for item in items
+        ]
+    }
+
+
+@compat_router.post("/benchmarks/labels")
+def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
+    relevant = payload.relevant_doc_ids or []
+    if not relevant:
+        candidate = services.search.execute(payload.dataset_id, payload.query_text, "classical", 5)
+        relevant = [r.doc_id for r in candidate["results"]]
+    item = services.upsert_ground_truth.execute(
+        dataset=payload.dataset_id,
+        query_id=payload.query_text.lower().replace(" ", "-")[:64],
+        query_text=payload.query_text,
+        relevant_doc_ids=relevant,
+        user_id=user_id,
+    )
+    return {
+        "benchmark_id": item.query_id,
+        "dataset_id": item.dataset,
+        "query_text": item.query_text,
+        "ideal_answer": payload.ideal_answer or "",
+        "relevant_doc_ids": item.relevant_doc_ids,
+    }
+
+
+@compat_router.delete("/benchmarks/labels/{dataset_id}/{benchmark_id}", status_code=204)
+def delete_benchmark_label(dataset_id: str, benchmark_id: str, services: Services = Depends(get_services)):
+    if not services.ground_truths.delete(dataset_id, benchmark_id):
+        raise HTTPException(status_code=404, detail="Benchmark not found")
+    return None

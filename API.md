@@ -1,247 +1,178 @@
-API Documentation - Quantum Search (TCC)
+# API
 
-Informacoes gerais
-- Base URL local: http://localhost:8000
-- Framework: FastAPI
-- Banco: PostgreSQL com pgvector
-- Autenticacao: JWT Bearer
+## Base URL
 
-Formato de payload
-- JSON para endpoints de dados estruturados.
-- multipart/form-data para upload em /search/file.
+- Backend: `http://localhost:8000`
+- Prefixo oficial: `/api`
+- Compatibilidade com front legado: rotas sem `/api` (ver `ROUTES_COMPAT.md`)
 
-Codigos de resposta comuns
-- 200 sucesso
-- 201 criado
-- 204 removido sem corpo
-- 400 erro de validacao
-- 401 nao autenticado
-- 404 recurso nao encontrado
-- 413 arquivo acima do limite
-- 429 limite de requisicoes excedido
+## Auth
 
-Endpoint de health
-GET /health
+### `POST /api/auth/signup`
+
+```json
+{ "email": "user@example.com", "password": "12345678", "name": "User" }
+```
+
+### `POST /api/auth/login` (OAuth2 form)
+
+`application/x-www-form-urlencoded`
+
+- `username`
+- `password`
+
 Resposta:
-- status: ok
 
-Autenticacao
-POST /auth/register
-Finalidade
-- Cria um usuario.
+```json
+{ "access_token": "...", "token_type": "bearer", "refresh_token": "..." }
+```
 
-Body
-- email
-- password
+### `GET /api/auth/me`
 
-Regras
-- email unico
-- password com limite de 72 bytes para compatibilidade bcrypt
+`Authorization: Bearer <token>`
 
-POST /auth/login
-Finalidade
-- Gera token JWT.
+### `POST /api/auth/forgot-password`
 
-Entrada
-- form-urlencoded com username e password
+Mensagem neutra (anti enumeração). Em dev, token é logado.
 
-Saida
-- access_token
-- token_type
+### `POST /api/auth/reset-password`
 
-GET /auth/me
-Finalidade
-- Retorna usuario autenticado.
+```json
+{ "token": "reset_token", "new_password": "newStrongPass123" }
+```
 
-Header obrigatorio
-- Authorization Bearer token
+### `POST /api/auth/refresh`
 
-Conversas
-POST /conversations
-Finalidade
-- Cria conversa para usuario autenticado.
+```json
+{ "refresh_token": "..." }
+```
 
-Body
-- title opcional
+## Chats
 
-GET /conversations
-Finalidade
-- Lista conversas do usuario autenticado.
+### `POST /api/chats`
 
-GET /conversations/{conversation_id}
-Finalidade
-- Retorna conversa e mensagens.
+```json
+{ "title": "Meu chat" }
+```
 
-POST /conversations/{conversation_id}/messages
-Finalidade
-- Adiciona mensagem na conversa.
+### `GET /api/chats?page=1&page_size=20`
 
-Body
-- role
-- content
+### `GET /api/chats/{chat_id}`
 
-Roles permitidos
-- user
-- assistant
-- system
+Retorna chat + mensagens.
 
-DELETE /conversations/{conversation_id}
-Finalidade
-- Remove conversa.
+### `POST /api/chats/{chat_id}/messages`
 
-Datasets
-GET /datasets
-Finalidade
-- Lista datasets disponiveis.
+```json
+{ "role": "user", "content": "Pergunta" }
+```
 
-GET /datasets/{dataset_id}
-Finalidade
-- Detalha dataset, queries e doc_ids.
+Roles: `user`, `assistant`, `system`.
 
-Benchmarks e gabaritos
-GET /benchmarks/labels
-Query param
-- dataset_id
+### `PATCH /api/chats/{chat_id}`
 
-Finalidade
-- Lista gabaritos salvos para um dataset.
+```json
+{ "title": "Novo título" }
+```
 
-POST /benchmarks/labels
-Finalidade
-- Cria ou atualiza gabarito.
+### `DELETE /api/chats/{chat_id}`
 
-Body
-- dataset_id
-- query_text
-- ideal_answer
+Soft delete.
 
-Regra importante
-- relevant_doc_ids e inferido automaticamente pelo backend.
+## Core IR
 
-DELETE /benchmarks/labels/{dataset_id}/{benchmark_id}
-Finalidade
-- Remove gabarito.
+### `GET /api/health`
 
-Busca geral por lista de documentos
-POST /search
-Finalidade
-- Busca sobre lista de textos enviada na propria requisicao.
+### `POST /api/index`
 
-Body
-- query
-- documents lista de strings
-- mode: classical, quantum, compare
-- top_k
-- candidate_k
+```json
+{ "dataset_id": "reuters", "force_reindex": false }
+```
 
-Busca por arquivo
-POST /search/file
-Finalidade
-- Busca sobre conteudo de arquivo enviado pelo usuario.
+Indexa com:
 
-Entrada multipart
-- query
-- file
-- mode
-- top_k
-- candidate_k
+- `encode_embedding(text)` -> `embedding_vector`
+- `encode_quantum(text)` -> `quantum_vector`
 
-Regras
-- arquivo obrigatorio
-- limite de 5 MB
-- formatos aceitos: TXT e PDF
-- fallback de query vazia: Resumo do documento
+### `POST /api/search`
 
-Comportamento de avaliacao
-- Se existir gabarito salvo para a pergunta no dataset padrao, aplica ideal_answer e calcula metricas.
-- relevant_doc_ids para ranking sao inferidos sobre os chunks do arquivo.
+```json
+{
+  "dataset_id": "reuters",
+  "query": "trade tariffs imports exports",
+  "mode": "compare",
+  "top_k": 5,
+  "chat_id": 1
+}
+```
 
-Indexacao de dataset
-POST /search/dataset/index
-Finalidade
-- Gera ou reusa indice vetorial persistente para dataset.
+`mode`: `classical`, `quantum`, `compare`
 
-Body
-- dataset_id
-- force_reindex
+Se `chat_id` for enviado, o backend salva uma mensagem `assistant` com payload estruturado do retrieval.
 
-Resposta
-- dataset_id
-- indexed_documents
-- reused_existing
-- embedder_provider
-- embedder_model
+### `POST /api/ground-truth`
 
-Busca em dataset indexado
-POST /search/dataset
-Finalidade
-- Busca no dataset com comparacao classica vs quantica e avaliacao por gabarito.
+```json
+{
+  "dataset_id": "reuters",
+  "query_id": "q1",
+  "query_text": "trade tariffs imports exports",
+  "relevant_doc_ids": ["docA", "docB"]
+}
+```
 
-Body
-- dataset_id
-- query opcional
-- query_id opcional
-- mode
-- top_k
-- candidate_k
+### `POST /api/evaluate`
 
-Resolucao de gabarito
-- Se query_id existir, backend busca benchmark salvo por id.
-- Se nao encontrar benchmark salvo, tenta query pre-definida no dataset.
-- Se query texto existir, backend tenta benchmark salvo por texto normalizado.
+```json
+{ "dataset_id": "reuters", "pipeline": "compare", "k": 5 }
+```
 
-Campos de resposta de busca
-- query
-- mode
-- results
-- answer
-- metrics
-- comparison quando modo compare
-- algorithm_details
+Métricas:
 
-Estrutura de metrics
-- accuracy_at_k
-- recall_at_k
-- mrr
-- ndcg_at_k
-- answer_similarity
-- has_ideal_answer
-- latency_ms
-- k
-- candidate_k
-- has_labels
+- `precision@k`
+- `recall@k`
+- `ndcg@k`
+- `spearman`
 
-Estrutura de algorithm_details
-- algorithm
-- comparator
-- candidate_strategy
-- description
-- debug
+## Compatibilidade com Front (rotas legado)
 
-Comportamento de fallback
-- Quando a consulta nao atinge relevancia minima, answer retorna Nao foi possivel consultar.
+- `POST /auth/register`
+- `POST /auth/login`
+- `GET /auth/me`
+- `GET|POST /conversations`
+- `GET|PATCH|DELETE /conversations/{id}`
+- `POST /conversations/{id}/messages`
+- `POST /search/file`
+- `POST /search/dataset/index`
+- `POST /search/dataset`
+- `GET /datasets`
+- `GET /datasets/{dataset_id}`
+- `GET|POST|DELETE /benchmarks/labels...`
 
-Rate limit nas rotas de busca
-- Janela: 60 segundos
-- Limite: 10 requisicoes por host
-- Rotas afetadas: /search, /search/file, /search/dataset/index, /search/dataset
+## Exemplos `curl`
 
-Resumo de endpoints principais
-- POST /auth/register
-- POST /auth/login
-- GET /auth/me
-- POST /conversations
-- GET /conversations
-- GET /conversations/{conversation_id}
-- POST /conversations/{conversation_id}/messages
-- DELETE /conversations/{conversation_id}
-- GET /datasets
-- GET /datasets/{dataset_id}
-- GET /benchmarks/labels
-- POST /benchmarks/labels
-- DELETE /benchmarks/labels/{dataset_id}/{benchmark_id}
-- POST /search
-- POST /search/file
-- POST /search/dataset/index
-- POST /search/dataset
-- GET /health
+### Signup + Login
+
+```bash
+curl -X POST http://localhost:8000/api/auth/signup \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"user@example.com","password":"12345678"}'
+
+curl -X POST http://localhost:8000/api/auth/login \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d 'username=user@example.com&password=12345678'
+```
+
+### Index + Search
+
+```bash
+curl -X POST http://localhost:8000/api/index \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"dataset_id":"reuters"}'
+
+curl -X POST http://localhost:8000/api/search \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"dataset_id":"reuters","query":"oil prices opec","mode":"compare","top_k":5}'
+```

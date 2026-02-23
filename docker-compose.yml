@@ -6,8 +6,12 @@ services:
       - .env
     volumes:
       - ./core:/app
+      - hf_cache:/root/.cache/huggingface
+      - st_cache:/root/.cache/torch/sentence_transformers
     environment:
       - PYTHONUNBUFFERED=1
+      - HF_HOME=/root/.cache/huggingface
+      - SENTENCE_TRANSFORMERS_HOME=/root/.cache/torch/sentence_transformers
     ports:
       - "8000:8000"
     depends_on:
@@ -42,3 +46,5 @@ services:
 
 volumes:
   pg_data:
+  hf_cache:
+  st_cache:

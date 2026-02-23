@@ -11,12 +11,7 @@ import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Conversation, Message, SearchResponse } from '@/lib/api';
 
-const DEFAULT_DATASET_ID = 'mini-rag';
-
-interface SendPayload {
-  message: string;
-  file?: File | null;
-}
+const DEFAULT_DATASET_ID = 'reuters';
 
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
@@ -106,39 +101,53 @@ export default function Chat() {
 
   const buildAssistantContent = (searchResponse: SearchResponse) => {
     const comparison = searchResponse.comparison;
-    const classical = comparison?.classical.metrics;
-    const quantum = comparison?.quantum.metrics;
+    const classicalResults = comparison?.classical.results ?? searchResponse.results ?? [];
+    const quantumResults = comparison?.quantum.results ?? [];
+    const comparative = searchResponse.comparison_metrics;
+    const classicalLatency = comparison?.classical.metrics?.latency_ms;
+    const quantumLatency = comparison?.quantum.metrics?.latency_ms;
 
-    const fallbackAnswer =
-      searchResponse.answer && searchResponse.answer.toLowerCase().includes('nao foi possivel')
-        ? searchResponse.answer
-        : 'Nao foi possivel consultar.';
-
-    if (!comparison || !classical || !quantum) {
-      return fallbackAnswer;
+    if (!classicalResults.length && !quantumResults.length) {
+      return 'Consulta executada, mas nenhum documento foi recuperado.';
     }
 
-    const hasLabels = Boolean(classical.has_labels || quantum.has_labels);
-    const hasIdealAnswer = Boolean(classical.has_ideal_answer || quantum.has_ideal_answer);
+    const lines: string[] = [
+      `Busca semantica no dataset Reuters (${searchResponse.mode}).`,
+    ];
 
-    if (!hasLabels && !hasIdealAnswer) {
-      return searchResponse.answer && !searchResponse.answer.toLowerCase().includes('nao foi possivel')
-        ? 'Consulta executada, mas sem gabarito para comparar acuracia.'
-        : fallbackAnswer;
+    if (classicalResults.length) {
+      lines.push(
+        'Classico: ' +
+          classicalResults.length +
+          ' docs recuperados | melhor score=' +
+          classicalResults[0].score.toFixed(3)
+      );
     }
 
-    const formatPct = (value?: number | null) =>
-      value === undefined || value === null ? '-' : (value * 100).toFixed(1) + '%';
+    if (quantumResults.length) {
+      lines.push(
+        'Quantico: ' +
+          quantumResults.length +
+          ' docs recuperados | melhor score=' +
+          quantumResults[0].score.toFixed(3)
+      );
+    }
 
-    return [
-      'Comparacao de acuracia (pipeline):',
-      'Classico  - Accuracy@' + classical.k + ': ' + formatPct(classical.accuracy_at_k) + ' | Precision@' + classical.k + ': ' + formatPct(classical.precision_at_k) + ' | Recall@' + classical.k + ': ' + formatPct(classical.recall_at_k) + ' | F1@' + classical.k + ': ' + formatPct(classical.f1_at_k) + ' | MRR: ' + formatPct(classical.mrr) + ' | NDCG@' + classical.k + ': ' + formatPct(classical.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(classical.answer_similarity),
-      'Quantico  - Accuracy@' + quantum.k + ': ' + formatPct(quantum.accuracy_at_k) + ' | Precision@' + quantum.k + ': ' + formatPct(quantum.precision_at_k) + ' | Recall@' + quantum.k + ': ' + formatPct(quantum.recall_at_k) + ' | F1@' + quantum.k + ': ' + formatPct(quantum.f1_at_k) + ' | MRR: ' + formatPct(quantum.mrr) + ' | NDCG@' + quantum.k + ': ' + formatPct(quantum.ndcg_at_k) + ' | Similaridade resposta ideal: ' + formatPct(quantum.answer_similarity),
-    ].join('\n');
+    if (comparative) {
+      lines.push(
+        `Overlap@${comparative.top_k}: ${comparative.overlap_at_k} | Jaccard@${comparative.top_k}: ${(comparative.jaccard_at_k * 100).toFixed(1)}%`
+      );
+    }
+
+    if (classicalLatency !== undefined && quantumLatency !== undefined) {
+      lines.push(`Latencia (ms): classico=${classicalLatency.toFixed(1)} | quantico=${quantumLatency.toFixed(1)}`);
+    }
+
+    return lines.join('\n');
   };
-  const handleSendMessage = async (payload: SendPayload) => {
+  const handleSendMessage = async (payload: { message: string }) => {
     const userText = payload.message.trim();
-    if (!userText && !payload.file) return;
+    if (!userText) return;
 
     setIsLoading(true);
 
@@ -146,23 +155,18 @@ export default function Chat() {
       let conversationId = activeConversationId;
 
       if (!conversationId) {
-        const title = userText || payload.file?.name || 'Nova consulta';
+        const title = userText || 'Nova consulta';
         const newConversation = await api.createConversation(title);
         conversationId = newConversation.id;
         setActiveConversationId(conversationId);
         setConversations((prev) => [newConversation, ...prev]);
       }
 
-      const userMessage = await api.addMessage(conversationId, 'user', userText || payload.file?.name || 'Consulta');
+      const userMessage = await api.addMessage(conversationId, 'user', userText || 'Consulta');
       setMessages((prev) => [...prev, userMessage]);
 
-      let searchResponse: SearchResponse;
-      if (payload.file) {
-        searchResponse = await api.searchWithFile(userText || payload.file.name, payload.file);
-      } else {
-        await api.indexDataset(DEFAULT_DATASET_ID);
-        searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
-      }
+      await api.indexDataset(DEFAULT_DATASET_ID);
+      const searchResponse = await api.searchDataset(userText, DEFAULT_DATASET_ID);
 
       setLastResponse(searchResponse);
       if (conversationId) {
@@ -181,7 +185,7 @@ export default function Chat() {
         {
           id: Date.now(),
           role: 'assistant',
-          content: `Nao foi possivel consultar. ${detail}`,
+          content: `Nao foi possivel consultar o dataset. ${detail}`,
           created_at: new Date().toISOString(),
         },
       ]);

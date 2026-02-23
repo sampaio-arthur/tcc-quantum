@@ -1,84 +1,7 @@
-import { SearchAlgorithmDetails, SearchMetrics, SearchResponse } from '@/lib/api';
+import { SearchAlgorithmDetails, SearchResponse } from '@/lib/api';
 
 interface ComparisonPanelProps {
   response: SearchResponse | null;
-}
-
-function formatPercent(value?: number | null) {
-  if (value === undefined || value === null) return '-';
-  return (value * 100).toFixed(1) + '%';
-}
-
-function formatMs(value?: number | null) {
-  if (value === undefined || value === null) return '-';
-  return value.toFixed(1) + ' ms';
-}
-
-function MetricBars({ label, classical, quantum }: { label: string; classical?: number | null; quantum?: number | null }) {
-  const classicalWidth = classical ? Math.max(0, Math.min(1, classical)) * 100 : 0;
-  const quantumWidth = quantum ? Math.max(0, Math.min(1, quantum)) * 100 : 0;
-
-  return (
-    <div className='space-y-2'>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>{label}</span>
-        <span>{formatPercent(classical)} | {formatPercent(quantum)}</span>
-      </div>
-      <div className='grid grid-cols-2 gap-3'>
-        <div className='h-2 rounded-full bg-muted overflow-hidden'>
-          <div className='h-full bg-emerald-400' style={{ width: classicalWidth + '%' }} />
-        </div>
-        <div className='h-2 rounded-full bg-muted overflow-hidden'>
-          <div className='h-full bg-sky-400' style={{ width: quantumWidth + '%' }} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MetricsSummary({ title, metrics }: { title: string; metrics?: SearchMetrics }) {
-  if (!metrics) {
-    return (
-      <div className='rounded-xl border border-border bg-card p-4'>
-        <p className='text-sm font-medium'>{title}</p>
-        <p className='text-xs text-muted-foreground mt-2'>Sem metricas disponiveis.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
-      <p className='text-sm font-medium'>{title}</p>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>Accuracy@{metrics.k}</span>
-        <span>{formatPercent(metrics.accuracy_at_k)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>Recall@{metrics.k}</span>
-        <span>{formatPercent(metrics.recall_at_k)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>MRR</span>
-        <span>{formatPercent(metrics.mrr)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>NDCG@{metrics.k}</span>
-        <span>{formatPercent(metrics.ndcg_at_k)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>Similaridade resposta ideal</span>
-        <span>{formatPercent(metrics.answer_similarity)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>Latencia</span>
-        <span>{formatMs(metrics.latency_ms)}</span>
-      </div>
-      <div className='flex items-center justify-between text-xs text-muted-foreground'>
-        <span>Candidatos</span>
-        <span>{metrics.candidate_k}</span>
-      </div>
-    </div>
-  );
 }
 
 function AlgorithmSummary({ title, details }: { title: string; details?: SearchAlgorithmDetails }) {
@@ -105,16 +28,38 @@ function AlgorithmSummary({ title, details }: { title: string; details?: SearchA
   );
 }
 
+function StepByStep({ title, details }: { title: string; details?: SearchAlgorithmDetails }) {
+  const rawSteps = details?.debug?.steps;
+  const steps = Array.isArray(rawSteps) ? rawSteps.filter((x): x is string => typeof x === 'string') : [];
+
+  return (
+    <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+      <p className='text-sm font-medium'>{title}</p>
+      {steps.length ? (
+        <ol className='space-y-1 text-xs text-muted-foreground'>
+          {steps.map((step, idx) => (
+            <li key={`${title}-${idx}`}>
+              <span className='text-foreground'>{idx + 1}.</span> {step}
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className='text-xs text-muted-foreground'>Passo a passo nao disponivel.</p>
+      )}
+    </div>
+  );
+}
+
 export function ComparisonPanel({ response }: ComparisonPanelProps) {
   if (!response) return null;
 
   const comparison = response.comparison;
   const showComparison = Boolean(comparison);
-  const classicalMetrics = comparison?.classical.metrics ?? response.metrics;
+  const classicalResults = comparison?.classical.results ?? response.results ?? [];
+  const quantumResults = comparison?.quantum.results ?? [];
+  const classicalMetrics = comparison?.classical.metrics;
   const quantumMetrics = comparison?.quantum.metrics;
-  const kValue = comparison?.classical.metrics?.k ?? classicalMetrics?.k ?? 5;
-  const hasLabels = Boolean(classicalMetrics?.has_labels || quantumMetrics?.has_labels);
-  const hasIdealAnswer = Boolean(classicalMetrics?.has_ideal_answer || quantumMetrics?.has_ideal_answer);
+  const comparative = response.comparison_metrics;
 
   return (
     <div className='w-full max-w-3xl mx-auto px-4 pb-6'>
@@ -129,11 +74,91 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
 
         {showComparison ? (
           <div className='grid gap-3 md:grid-cols-2'>
-            <MetricsSummary title='Classico' metrics={comparison?.classical.metrics} />
-            <MetricsSummary title='Quantico' metrics={comparison?.quantum.metrics} />
+            <StepByStep title='Passo a passo: Classico' details={comparison?.classical.algorithm_details} />
+            <StepByStep title='Passo a passo: Quantico' details={comparison?.quantum.algorithm_details} />
           </div>
         ) : (
-          <MetricsSummary title='Resultado' metrics={response.metrics} />
+          <StepByStep title='Passo a passo' details={response.algorithm_details} />
+        )}
+
+        {showComparison && (
+          <div className='rounded-xl border border-border bg-card p-4'>
+            <p className='text-sm font-medium mb-3'>Tabela Comparativa (proxy de efetividade + custo)</p>
+            <div className='overflow-x-auto'>
+              <table className='w-full text-xs'>
+                <thead>
+                  <tr className='text-left text-muted-foreground border-b border-border'>
+                    <th className='py-2 pr-3'>Metrica</th>
+                    <th className='py-2 pr-3'>Classico</th>
+                    <th className='py-2 pr-3'>Quantico</th>
+                    <th className='py-2'>Observacao</th>
+                  </tr>
+                </thead>
+                <tbody className='text-muted-foreground'>
+                  <tr className='border-b border-border/60'>
+                    <td className='py-2 pr-3 text-foreground'>Latencia (ms)</td>
+                    <td className='py-2 pr-3'>{classicalMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
+                    <td className='py-2 pr-3'>{quantumMetrics?.latency_ms?.toFixed(1) ?? '-'}</td>
+                    <td className='py-2'>Comparativo de custo/tempo (nao e qualidade)</td>
+                  </tr>
+                  <tr className='border-b border-border/60'>
+                    <td className='py-2 pr-3 text-foreground'>Mean score@k</td>
+                    <td className='py-2 pr-3'>{typeof comparative?.classical_mean_score === 'number' ? comparative.classical_mean_score.toFixed(3) : '-'}</td>
+                    <td className='py-2 pr-3'>{typeof comparative?.quantum_mean_score === 'number' ? comparative.quantum_mean_score.toFixed(3) : '-'}</td>
+                    <td className='py-2'>Comparavel apenas dentro deste setup (espacos vetoriais diferentes)</td>
+                  </tr>
+                  <tr className='border-b border-border/60'>
+                    <td className='py-2 pr-3 text-foreground'>Docs recuperados</td>
+                    <td className='py-2 pr-3'>{classicalResults.length}</td>
+                    <td className='py-2 pr-3'>{quantumResults.length}</td>
+                    <td className='py-2'>Top-k retornado por pipeline</td>
+                  </tr>
+                  <tr className='border-b border-border/60'>
+                    <td className='py-2 pr-3 text-foreground'>Overlap@k</td>
+                    <td className='py-2 pr-3' colSpan={2}>{comparative?.overlap_at_k ?? '-'}</td>
+                    <td className='py-2'>Interseccao entre rankings classico e quantico</td>
+                  </tr>
+                  <tr>
+                    <td className='py-2 pr-3 text-foreground'>Jaccard@k</td>
+                    <td className='py-2 pr-3' colSpan={2}>
+                      {typeof comparative?.jaccard_at_k === 'number' ? (comparative.jaccard_at_k * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                    <td className='py-2'>Similaridade entre conjuntos recuperados</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {showComparison ? (
+          <div className='grid gap-3 md:grid-cols-2'>
+            <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+              <p className='text-sm font-medium'>Resultados recuperados: Classico</p>
+              {classicalResults.length ? classicalResults.slice(0, 5).map((item, idx) => (
+                <div key={`c-${item.doc_id}-${idx}`} className='text-xs text-muted-foreground'>
+                  <span className='text-foreground'>{idx + 1}.</span> score={item.score.toFixed(3)}
+                </div>
+              )) : <p className='text-xs text-muted-foreground'>Nenhum documento recuperado.</p>}
+            </div>
+            <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+              <p className='text-sm font-medium'>Resultados recuperados: Quantico</p>
+              {quantumResults.length ? quantumResults.slice(0, 5).map((item, idx) => (
+                <div key={`q-${item.doc_id}-${idx}`} className='text-xs text-muted-foreground'>
+                  <span className='text-foreground'>{idx + 1}.</span> score={item.score.toFixed(3)}
+                </div>
+              )) : <p className='text-xs text-muted-foreground'>Nenhum documento recuperado.</p>}
+            </div>
+          </div>
+        ) : (
+          <div className='rounded-xl border border-border bg-card p-4 space-y-2'>
+            <p className='text-sm font-medium'>Resultados recuperados</p>
+            {(response.results ?? []).slice(0, 5).map((item, idx) => (
+              <div key={`r-${item.doc_id}-${idx}`} className='text-xs text-muted-foreground'>
+                <span className='text-foreground'>{idx + 1}.</span> score={item.score.toFixed(3)}
+              </div>
+            ))}
+          </div>
         )}
 
         {showComparison ? (
@@ -145,41 +170,9 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
           <AlgorithmSummary title='Como funciona' details={response.algorithm_details} />
         )}
 
-        {showComparison && (hasLabels || hasIdealAnswer) && (
-          <div className='space-y-4'>
-            <MetricBars
-              label={'Accuracy@' + kValue}
-              classical={comparison?.classical.metrics?.accuracy_at_k}
-              quantum={comparison?.quantum.metrics?.accuracy_at_k}
-            />
-            <MetricBars
-              label={'Recall@' + kValue}
-              classical={comparison?.classical.metrics?.recall_at_k}
-              quantum={comparison?.quantum.metrics?.recall_at_k}
-            />
-            <MetricBars
-              label='MRR'
-              classical={comparison?.classical.metrics?.mrr}
-              quantum={comparison?.quantum.metrics?.mrr}
-            />
-            <MetricBars
-              label={'NDCG@' + kValue}
-              classical={comparison?.classical.metrics?.ndcg_at_k}
-              quantum={comparison?.quantum.metrics?.ndcg_at_k}
-            />
-            <MetricBars
-              label='Similaridade resposta ideal'
-              classical={comparison?.classical.metrics?.answer_similarity}
-              quantum={comparison?.quantum.metrics?.answer_similarity}
-            />
-          </div>
-        )}
-
-        {showComparison && !hasLabels && !hasIdealAnswer && (
-          <p className='text-xs text-muted-foreground'>
-            As metricas de acuracia aparecem apenas quando a consulta possui gabarito salvo.
-          </p>
-        )}
+        <p className='text-xs text-muted-foreground'>
+          O chat exibe proxies comparativos (latencia, overlap e scores) sem gabarito. Para metricas de IR canonicas (precision/recall/NDCG/Spearman), use avaliacao batch com ground truth.
+        </p>
       </div>
     </div>
   );
