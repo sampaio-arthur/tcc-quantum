@@ -25,8 +25,13 @@ Topologia
 Pipeline ponta a ponta
 
 Etapa 1 - Dataset
-- Fonte: core/data/public_datasets.json.
-- Estrutura: datasets, documents, queries.
+- Fonte real: `Reuters-21578` via `nltk.corpus.reuters` (NLTK).
+- Recorte atual (reprodutivel no sistema): `max_docs=300` documentos e `max_queries=20` categorias/queries.
+- Sem fallback local: se o corpus Reuters do NLTK nao estiver disponivel, o backend falha explicitamente e exige download/instalacao do corpus real.
+- Referencias:
+- `https://www.nltk.org/howto/corpus.html`
+- `https://www.nltk.org/book/ch02.html`
+- `http://kdd.ics.uci.edu/databases/reuters21578/reuters21578.html`
 
 Etapa 2 - Indexacao
 1) Ler documentos do dataset.
@@ -120,10 +125,9 @@ Tabelas funcionais
 - users
 - conversations
 - messages
-- dataset_document_index
-- benchmark_ground_truths
-- search_runs
-- search_vector_records
+- documents
+- ground_truth
+- dataset_snapshots (snapshot persistido do dataset usado na indexacao: metadados, doc_ids e queries)
 
 Gabarito e inferencia de relevantes
 - Entrada do usuario: query_text e ideal_answer.
@@ -155,7 +159,7 @@ Fallbacks e limites
 - Resposta fallback por baixa relevancia: Nao foi possivel consultar.
 - Limiar: SEARCH_MIN_RELEVANCE_SCORE.
 - Rate limit: 10 requisicoes por minuto por host nas rotas de busca.
-- Upload em /search/file limitado a 5 MB.
+- /search/file foi removido (retorna 410).
 
 Seguranca
 - Autenticacao JWT.

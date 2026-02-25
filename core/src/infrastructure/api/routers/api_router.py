@@ -322,8 +322,23 @@ def evaluate(payload: EvaluateRequest, user_id: int = Depends(get_current_user_i
 
 @compat_router.get("/datasets")
 def list_datasets(services: Services = Depends(get_services)):
+    snapshots = services.dataset_snapshots.list_all()
+    if snapshots:
+        return [
+            {
+                "dataset_id": s.dataset_id,
+                "name": s.name,
+                "description": s.description,
+                "document_count": s.document_count,
+                "query_count": s.query_count,
+            }
+            for s in snapshots
+        ]
     provider = services.index_dataset.datasets
-    datasets = provider.list_datasets()
+    try:
+        datasets = provider.list_datasets()
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
     return [
         {
             "dataset_id": d["dataset_id"],
@@ -338,8 +353,39 @@ def list_datasets(services: Services = Depends(get_services)):
 
 @compat_router.get("/datasets/{dataset_id}")
 def get_dataset(dataset_id: str, services: Services = Depends(get_services)):
+    snapshot = services.dataset_snapshots.get(dataset_id)
+    if snapshot:
+        return {
+            "dataset_id": snapshot.dataset_id,
+            "name": snapshot.name,
+            "provider": snapshot.provider,
+            "source_url": snapshot.source_url,
+            "reference_urls": snapshot.reference_urls,
+            "description": snapshot.description,
+            "subset": {"max_docs": snapshot.max_docs, "max_queries": snapshot.max_queries},
+            "document_count": snapshot.document_count,
+            "query_count": snapshot.query_count,
+            "queries": [
+                {
+                    "query_id": q.get("query_id"),
+                    "query": q.get("query_text", ""),
+                    "relevant_count": len(q.get("relevant_doc_ids") or []),
+                }
+                for q in snapshot.queries
+            ],
+            "snapshot_queries": snapshot.queries,
+            "documents": [{"doc_id": doc_id} for doc_id in snapshot.document_ids],
+            "snapshot": {
+                "persisted": True,
+                "created_at": _serialize_dt(snapshot.created_at),
+                "updated_at": _serialize_dt(snapshot.updated_at),
+            },
+        }
     provider = services.index_dataset.datasets
-    dataset = provider.get_dataset(dataset_id)
+    try:
+        dataset = provider.get_dataset(dataset_id)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
     return dataset

@@ -6,9 +6,24 @@ from math import sqrt
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
-from domain.entities import Chat, ChatMessage, Document, GroundTruth, MessageRole, SearchResult, User
-from domain.ports import ChatRepositoryPort, DocumentRepositoryPort, GroundTruthRepositoryPort, PasswordResetRepositoryPort, UserRepositoryPort
-from infrastructure.db.models import ChatMessageModel, ChatModel, DocumentModel, GroundTruthModel, PasswordResetModel, UserModel
+from domain.entities import Chat, ChatMessage, DatasetSnapshot, Document, GroundTruth, MessageRole, SearchResult, User
+from domain.ports import (
+    ChatRepositoryPort,
+    DatasetSnapshotRepositoryPort,
+    DocumentRepositoryPort,
+    GroundTruthRepositoryPort,
+    PasswordResetRepositoryPort,
+    UserRepositoryPort,
+)
+from infrastructure.db.models import (
+    ChatMessageModel,
+    ChatModel,
+    DatasetSnapshotModel,
+    DocumentModel,
+    GroundTruthModel,
+    PasswordResetModel,
+    UserModel,
+)
 
 
 def _cosine_score(a: list[float], b: list[float]) -> float:
@@ -255,3 +270,56 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
         self.session.delete(row)
         self.session.commit()
         return True
+
+
+class SqlAlchemyDatasetSnapshotRepository(DatasetSnapshotRepositoryPort):
+    def __init__(self, session: Session) -> None:
+        self.session = session
+
+    def _to_entity(self, row: DatasetSnapshotModel) -> DatasetSnapshot:
+        return DatasetSnapshot(
+            dataset_id=row.dataset_id,
+            name=row.name,
+            provider=row.provider,
+            description=row.description,
+            source_url=row.source_url,
+            reference_urls=list(row.reference_urls or []),
+            max_docs=row.max_docs,
+            max_queries=row.max_queries,
+            document_count=row.document_count,
+            query_count=row.query_count,
+            document_ids=list(row.document_ids or []),
+            queries=list(row.queries_json or []),
+            created_at=row.created_at,
+            updated_at=row.updated_at,
+        )
+
+    def upsert(self, item: DatasetSnapshot) -> DatasetSnapshot:
+        row = self.session.scalar(select(DatasetSnapshotModel).where(DatasetSnapshotModel.dataset_id == item.dataset_id))
+        if row is None:
+            row = DatasetSnapshotModel(dataset_id=item.dataset_id)
+            self.session.add(row)
+        row.name = item.name
+        row.provider = item.provider
+        row.description = item.description
+        row.source_url = item.source_url
+        row.reference_urls = item.reference_urls
+        row.max_docs = item.max_docs
+        row.max_queries = item.max_queries
+        row.document_count = item.document_count
+        row.query_count = item.query_count
+        row.document_ids = item.document_ids
+        row.queries_json = item.queries
+        self.session.commit()
+        self.session.refresh(row)
+        return self._to_entity(row)
+
+    def get(self, dataset_id: str) -> DatasetSnapshot | None:
+        row = self.session.scalar(select(DatasetSnapshotModel).where(DatasetSnapshotModel.dataset_id == dataset_id))
+        if not row:
+            return None
+        return self._to_entity(row)
+
+    def list_all(self) -> list[DatasetSnapshot]:
+        rows = self.session.scalars(select(DatasetSnapshotModel).order_by(DatasetSnapshotModel.dataset_id.asc())).all()
+        return [self._to_entity(row) for row in rows]

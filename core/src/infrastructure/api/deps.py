@@ -25,6 +25,7 @@ from infrastructure.encoders.quantum import PennyLaneQuantumEncoder
 from infrastructure.metrics.sklearn_metrics import SklearnMetricsAdapter
 from infrastructure.repositories.sqlalchemy_repositories import (
     SqlAlchemyChatRepository,
+    SqlAlchemyDatasetSnapshotRepository,
     SqlAlchemyDocumentRepository,
     SqlAlchemyGroundTruthRepository,
     SqlAlchemyPasswordResetRepository,
@@ -41,6 +42,7 @@ class Services:
     users: SqlAlchemyUserRepository
     chats: SqlAlchemyChatRepository
     documents: SqlAlchemyDocumentRepository
+    dataset_snapshots: SqlAlchemyDatasetSnapshotRepository
     ground_truths: SqlAlchemyGroundTruthRepository
     sign_up: SignUpUseCase
     sign_in: SignInUseCase
@@ -66,6 +68,7 @@ def get_services(session: Session = Depends(db_session), settings: Settings = De
     resets = SqlAlchemyPasswordResetRepository(session)
     chats = SqlAlchemyChatRepository(session)
     docs = SqlAlchemyDocumentRepository(session)
+    dataset_snaps = SqlAlchemyDatasetSnapshotRepository(session)
     gts = SqlAlchemyGroundTruthRepository(session)
 
     hasher = BcryptPasswordHasher()
@@ -95,11 +98,12 @@ def get_services(session: Session = Depends(db_session), settings: Settings = De
         add_message=AddMessageUseCase(chats),
         rename_chat=RenameChatUseCase(chats),
         delete_chat=DeleteChatUseCase(chats),
-        index_dataset=IndexDatasetUseCase(datasets, docs, embedding_encoder, quantum_encoder),
+        index_dataset=IndexDatasetUseCase(datasets, docs, embedding_encoder, quantum_encoder, dataset_snaps),
         search=search_uc,
         upsert_ground_truth=UpsertGroundTruthUseCase(gts),
         evaluate=EvaluateUseCase(gts, search_uc, metrics),
         build_assistant_message=BuildAssistantRetrievalMessageUseCase(),
+        dataset_snapshots=dataset_snaps,
         jwt=jwt,
     )
 

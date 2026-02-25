@@ -3,10 +3,11 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from domain.entities import Document, EvaluationResult, GroundTruth, Pipeline, Query
+from domain.entities import DatasetSnapshot, Document, EvaluationResult, GroundTruth, Pipeline, Query
 from domain.exceptions import NotFoundError, ValidationError
 from domain.ports import (
     DatasetProviderPort,
+    DatasetSnapshotRepositoryPort,
     DocumentRepositoryPort,
     EncoderPort,
     EvaluationAggregate,
@@ -28,19 +29,24 @@ class IndexDatasetUseCase:
         documents: DocumentRepositoryPort,
         embedding_encoder: EncoderPort,
         quantum_encoder: EncoderPort,
+        dataset_snapshots: DatasetSnapshotRepositoryPort | None = None,
     ) -> None:
         self.datasets = datasets
         self.documents = documents
         self.embedding_encoder = embedding_encoder
         self.quantum_encoder = quantum_encoder
+        self.dataset_snapshots = dataset_snapshots
 
     def execute(self, dataset_id: str) -> dict:
-        if not self.datasets.get_dataset(dataset_id):
+        dataset_meta = self.datasets.get_dataset(dataset_id)
+        if not dataset_meta:
             raise NotFoundError("Dataset not found.")
         batch: list[Document] = []
+        document_ids: list[str] = []
         total = 0
         for item in self.datasets.iter_documents(dataset_id):
             text = item["text"]
+            document_ids.append(item["doc_id"])
             batch.append(
                 Document(
                     dataset=dataset_id,
@@ -56,7 +62,40 @@ class IndexDatasetUseCase:
                 batch.clear()
         if batch:
             total += self.documents.upsert_documents(batch)
-        return {"dataset_id": dataset_id, "indexed_count": total, "embedding_dim": self.embedding_encoder.dim, "quantum_dim": self.quantum_encoder.dim}
+        query_snapshot = [
+            {
+                "query_id": q["query_id"],
+                "query_text": q["query_text"],
+                "relevant_doc_ids": list(q.get("relevant_doc_ids") or []),
+            }
+            for q in self.datasets.iter_queries(dataset_id)
+        ]
+        if self.dataset_snapshots is not None:
+            subset = dataset_meta.get("subset") or {}
+            self.dataset_snapshots.upsert(
+                DatasetSnapshot(
+                    dataset_id=dataset_id,
+                    name=dataset_meta.get("name") or dataset_id,
+                    provider=dataset_meta.get("provider") or "unknown",
+                    description=dataset_meta.get("description") or "",
+                    source_url=dataset_meta.get("source_url"),
+                    reference_urls=list(dataset_meta.get("reference_urls") or []),
+                    max_docs=subset.get("max_docs"),
+                    max_queries=subset.get("max_queries"),
+                    document_count=len(document_ids),
+                    query_count=len(query_snapshot),
+                    document_ids=document_ids,
+                    queries=query_snapshot,
+                )
+            )
+        return {
+            "dataset_id": dataset_id,
+            "indexed_count": total,
+            "embedding_dim": self.embedding_encoder.dim,
+            "quantum_dim": self.quantum_encoder.dim,
+            "snapshot_document_count": len(document_ids),
+            "snapshot_query_count": len(query_snapshot),
+        }
 
 
 class SearchUseCase:

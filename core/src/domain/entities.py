@@ -88,6 +88,24 @@ class GroundTruth:
 
 
 @dataclass(slots=True)
+class DatasetSnapshot:
+    dataset_id: str
+    name: str
+    provider: str
+    description: str
+    source_url: str | None = None
+    reference_urls: list[str] = field(default_factory=list)
+    max_docs: int | None = None
+    max_queries: int | None = None
+    document_count: int = 0
+    query_count: int = 0
+    document_ids: list[str] = field(default_factory=list)
+    queries: list[dict[str, Any]] = field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+@dataclass(slots=True)
 class Chat:
     id: int | None
     user_id: int

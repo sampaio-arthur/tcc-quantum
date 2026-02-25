@@ -64,6 +64,25 @@ Constraint:
 
 - `UNIQUE(dataset, query_id)`
 
+### `dataset_snapshots`
+
+- `dataset_id` (UNIQUE)
+- `name`
+- `provider`
+- `description`
+- `source_url` (opcional)
+- `reference_urls` (JSON/JSONB)
+- `max_docs` / `max_queries` (recorte persistido)
+- `document_count` / `query_count`
+- `document_ids` (JSON/JSONB; lista exata de docs indexados)
+- `queries` (JSON/JSONB; snapshot das queries e `relevant_doc_ids`)
+- `created_at`
+- `updated_at`
+
+Constraint:
+
+- `UNIQUE(dataset_id)`
+
 ## Vetores
 
 - Em PostgreSQL: `pgvector` via `VectorType`

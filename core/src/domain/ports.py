@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from .entities import Chat, ChatMessage, Document, EvaluationResult, GroundTruth, SearchResult, User
+from .entities import Chat, ChatMessage, DatasetSnapshot, Document, EvaluationResult, GroundTruth, SearchResult, User
 
 
 class DocumentRepositoryPort(Protocol):
@@ -20,6 +20,12 @@ class GroundTruthRepositoryPort(Protocol):
     def get(self, dataset: str, query_id: str) -> GroundTruth | None: ...
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]: ...
     def delete(self, dataset: str, query_id: str) -> bool: ...
+
+
+class DatasetSnapshotRepositoryPort(Protocol):
+    def upsert(self, item: DatasetSnapshot) -> DatasetSnapshot: ...
+    def get(self, dataset_id: str) -> DatasetSnapshot | None: ...
+    def list_all(self) -> list[DatasetSnapshot]: ...
 
 
 class UserRepositoryPort(Protocol):

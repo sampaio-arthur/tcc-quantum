@@ -72,7 +72,17 @@ uvicorn infrastructure.api.fastapi_app:app --host 0.0.0.0 --port 8000 --app-dir 
 
 - Provider: `nltk.corpus.reuters`
 - Download automático tentado pelo backend (`nltk.download("reuters")`)
-- Fallback pequeno local incluído para dev/teste se o corpus não estiver disponível
+- Sem fallback local: o sistema exige o corpus Reuters real (NLTK) para listar/indexar o dataset
+- Recorte atual usado na aplicação: `max_docs=300` e `max_queries=20` (subset reprodutível)
+- Ao indexar (`POST /api/index`), o backend persiste um snapshot no banco (`dataset_snapshots`) com:
+  - metadados da fonte e links de referência
+  - lista exata de `doc_ids` indexados
+  - queries usadas e `relevant_doc_ids` por query
+
+Referências do dataset:
+- NLTK corpora/howto: `https://www.nltk.org/howto/corpus.html`
+- NLTK Book (Reuters examples): `https://www.nltk.org/book/ch02.html`
+- Reuters-21578 (UCI/KDD): `http://kdd.ics.uci.edu/databases/reuters21578/reuters21578.html`
 
 ## Fluxo principal (mínimo)
 
