@@ -74,14 +74,6 @@ Modos suportados:
 - `quantum`
 - `compare`
 
-Comportamento atual (importante para evitar confusao com docs antigos):
-
-- Nao existe re-ranking por `candidate_k`
-- Nao existe swap test
-- Nao existe projeccao para 64 dimensoes
-- Nao existe busca por arquivo ativa (`/search/file` retorna `410`)
-- Ambos pipelines fazem ranking completo no dataset pela coluna vetorial correspondente
-
 Pipeline classico:
 
 1. Encode da query com `SbertEncoder`
