@@ -133,12 +133,6 @@ export default function Chat() {
       );
     }
 
-    if (comparative) {
-      lines.push(
-        `Overlap@${comparative.top_k}: ${comparative.overlap_at_k} | Jaccard@${comparative.top_k}: ${(comparative.jaccard_at_k * 100).toFixed(1)}%`
-      );
-    }
-
     if (classicalLatency !== undefined && quantumLatency !== undefined) {
       lines.push(`Latencia (ms): classico=${classicalLatency.toFixed(1)} | quantico=${quantumLatency.toFixed(1)}`);
     }

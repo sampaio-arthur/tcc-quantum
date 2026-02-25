@@ -192,15 +192,12 @@ class SearchUseCase:
         c_set = set(c_ids)
         q_set = set(q_ids)
         intersection = sorted(c_set.intersection(q_set))
-        union = c_set.union(q_set)
 
         def _mean_score(items):
             return (sum(float(x.score) for x in items[:top_k]) / max(len(items[:top_k]), 1)) if items else 0.0
 
         return {
             "top_k": top_k,
-            "overlap_at_k": len(intersection),
-            "jaccard_at_k": (len(intersection) / len(union)) if union else 0.0,
             "common_doc_ids": intersection,
             "classical_mean_score": _mean_score(classical_results),
             "quantum_mean_score": _mean_score(quantum_results),
@@ -334,7 +331,6 @@ class EvaluateUseCase:
 
 class BuildAssistantRetrievalMessageUseCase:
     def execute(self, search_payload: dict) -> dict:
-        comparison = search_payload.get("comparison") or {}
         return {
             "type": "retrieval_result",
             "query": search_payload.get("query"),
@@ -344,12 +340,4 @@ class BuildAssistantRetrievalMessageUseCase:
                 {"doc_id": r.doc_id, "score": r.score}
                 for r in (search_payload.get("results") or [])
             ],
-            "comparison_overlap": self._overlap(comparison),
         }
-
-    def _overlap(self, comparison: dict) -> dict:
-        classical = comparison.get("classical", {}).get("results", [])
-        quantum = comparison.get("quantum", {}).get("results", [])
-        c_ids = [item.doc_id for item in classical]
-        q_ids = [item.doc_id for item in quantum]
-        return {"common_doc_ids": sorted(set(c_ids).intersection(q_ids)), "classical_only": [x for x in c_ids if x not in q_ids], "quantum_only": [x for x in q_ids if x not in c_ids]}

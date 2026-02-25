@@ -1,231 +1,278 @@
-Documentacao Tecnica - Quantum Search (TCC)
+Documentacao Tecnica - Quantum Search (estado atual do codigo)
 
-Escopo tecnico
-- Comparar busca classica e busca quantico-inspirada no mesmo pipeline.
-- Medir acuracia de ranking, similaridade de resposta e latencia.
+## Objetivo
 
-Arquitetura
+Comparar retrieval semantico em dois pipelines no mesmo dataset:
 
-Camadas
-- domain: entidades e contratos de dominio.
-- application: DTOs, servicos e use cases.
-- infrastructure: API, persistencia, embeddings, comparadores quanticos e classicos.
-- frontend: SPA React para operacao da plataforma.
+- Classico (`SbertEncoder` + cosseno em `embedding_vector`)
+- Quantico-inspirado (`PennyLaneQuantumEncoder` + cosseno em `quantum_vector`)
 
-Servicos em runtime
-- core: API FastAPI.
-- frontend: aplicacao React com Vite.
-- db: Postgres com pgvector.
+O sistema tambem inclui:
 
-Topologia
-- frontend chama core por HTTP.
-- core consulta base relacional e vetorial no Postgres.
-- core utiliza provedor de embeddings configurado por ambiente.
+- autenticacao JWT com refresh token
+- chats persistidos (sem LLM; mensagens do assistant sao resumos/payloads de retrieval)
+- cadastro de ground truth
+- avaliacao batch com metricas de IR
 
-Pipeline ponta a ponta
+## Arquitetura (aderente ao projeto)
 
-Etapa 1 - Dataset
-- Fonte real: `Reuters-21578` via `nltk.corpus.reuters` (NLTK).
-- Padrão atual (reprodutivel no sistema): snapshot completo do Reuters-21578 (`max_docs=null`, `max_queries=null`, sem recorte).
-- Sem fallback local: se o corpus Reuters do NLTK nao estiver disponivel, o backend falha explicitamente e exige download/instalacao do corpus real.
-- Referencias:
-- `https://www.nltk.org/howto/corpus.html`
-- `https://www.nltk.org/book/ch02.html`
-- `http://kdd.ics.uci.edu/databases/reuters21578/reuters21578.html`
+### Camadas
 
-Etapa 2 - Indexacao
-1) Ler documentos do dataset.
-2) Gerar embeddings.
-3) Persistir em dataset_document_index.
-4) Reusar indice existente quando provider e model coincidirem.
+- `core/src/domain`: entidades, enums, excecoes e ports
+- `core/src/application`: casos de uso (auth, chats, IR)
+- `core/src/infrastructure`: API FastAPI, banco, repositorios, encoders, metricas, seguranca, dataset provider
+- `frontend`: SPA React/Vite consumindo rotas compativeis sem prefixo `/api`
 
-Etapa 3 - Consulta
-1) Receber pergunta.
-2) Gerar embedding da pergunta.
-3) Executar ramo classico e ramo quantico quando mode compare.
-4) Gerar resposta final com trechos mais relevantes.
+### Servicos em runtime
 
-Etapa 4 - Avaliacao
-1) Resolver gabarito por query_id ou query_text.
-2) Calcular metricas de ranking usando relevant_doc_ids.
-3) Calcular answer_similarity com resposta ideal quando existir.
-4) Retornar metrics e algorithm_details.
+- `core`: FastAPI + Uvicorn
+- `frontend`: Vite (Docker exposto em `5173`; `vite.config.ts` usa `8080` no dev local do frontend)
+- `db`: PostgreSQL com imagem `pgvector/pgvector:pg16`
 
-Fluxo classico
-- Calcula similaridade cosseno pergunta x todos documentos.
-- Ordena por score descrescente.
-- Usa top resultados para resposta e metricas.
+### Persistencia vetorial
 
-Fluxo quantico-inspirado
-- Calcula score classico inicial para todos documentos.
-- Seleciona candidate_k melhores candidatos classicos.
-- Reavalia candidatos com swap test (PennyLane).
-- Reordena por score quantico final.
+- PostgreSQL: `pgvector` via `VectorType`
+- SQLite/testes: fallback JSON + score cosseno calculado em Python
 
-Dimensionalidade quantica
-- Simulacao trabalha com limite pratico de 64 dimensoes.
-- Vetores maiores sao projetados para 64 antes do circuito.
-- O retorno inclui debug com method, used_projection e n_qubits.
+## Fluxo ponta a ponta
 
-Custo de vetores (embeddings)
+### 1) Dataset (Reuters)
 
-Pipeline de custo
-1) PDF/TXT -> extracao de texto.
-2) Chunking -> gera n_chunks.
-3) Embedding -> custo por chamada (API ou local).
-4) Armazenamento vetorial -> custo de RAM/disco e indices.
-5) Busca -> custo de CPU/latencia (ex.: HNSW vs full scan).
+- Provider implementado: `core/src/infrastructure/datasets/reuters_provider.py`
+- Fonte: `nltk.corpus.reuters` (Reuters-21578)
+- O provider tenta `nltk.download("reuters")` automaticamente se o corpus nao estiver instalado
+- Sem mini-dataset local interno: se o corpus continuar indisponivel, a API falha com erro de validacao
+- Aliases aceitos: `reuters`, `reuters-21578`, `reuters21578`, `nltk-reuters`, etc.
+- Configuracao atual do provider no codigo: snapshot completo (`max_docs=None`, `max_queries=None`)
 
-Estimativas basicas
-- Tokens ~= caracteres / 4 (regra pratica).
-- n_chunks ~= tokens / (chunk_size - overlap).
-- Vetores (float32): tamanho_bytes ~= n_chunks x dimensao x 4.
-- Armazenamento real com metadados e indices tende a 1.3x a 1.8x do tamanho bruto.
+### 2) Indexacao
 
-Exemplo rapido (768 dims)
-- 10.000 chunks x 768 x 4 bytes ~= 30,7 MB (so vetores).
-- Com overhead de indices e metadados: ~40-55 MB.
+Caso de uso: `IndexDatasetUseCase`
 
-Exemplo pratico com chunking atual (max_chars=800, overlap=150)
-- Passo efetivo ~= 650 chars por chunk.
+Passos reais:
 
-| Tamanho do texto | n_chunks (aprox) | Vetores (768D) | Vetores + overhead |
-| --- | --- | --- | --- |
-| 50 KB | 79 | ~0,23 MB | ~0,30-0,41 MB |
-| 500 KB | 788 | ~2,31 MB | ~3,0-4,2 MB |
-| 1 MB | 1.614 | ~4,73 MB | ~6,1-8,5 MB |
-| 5 MB | 8.066 | ~23,6 MB | ~30-43 MB |
+1. Busca metadados do dataset no provider
+2. Itera documentos do Reuters
+3. Gera `embedding_vector` com `SbertEncoder.encode(text)`
+4. Gera `quantum_vector` com `PennyLaneQuantumEncoder.encode(text)`
+5. Faz upsert em `documents` em lotes de 64
+6. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
 
-Custos diretos
-- Geracao (API paga): custo = embeddings x preco_por_embedding.
-- Armazenamento: custo mensal do Postgres/pgvector conforme GB.
-- Busca: depende de indice (HNSW reduz latencia e CPU; full scan custa mais em CPU).
+Observacoes:
 
-Boas praticas de custo
-- Cache de embeddings para evitar recomputar.
-- Ajustar chunk_size/overlap conforme recall vs custo.
-- Monitorar n_chunks por documento para evitar explodir o custo.
+- `POST /api/index` executa indexacao sincrona
+- O frontend atual usa a rota compativel `POST /search/dataset/index`, que dispara job em thread + polling em `/search/dataset/index/status`
+- O job assyncrono pode pular reindexacao se snapshot e contagem de docs coincidirem (`already_indexed`)
 
-Busca por arquivo
+### 3) Busca
 
-Entrada
-- Arquivo TXT ou PDF.
-- Pergunta opcional.
+Caso de uso: `SearchUseCase`
 
-Processamento
-1) Extrair texto.
-2) Chunking por sentencas com overlap.
-3) Buscar sobre os chunks.
-4) Se existir gabarito para a pergunta no dataset padrao, usar ideal_answer.
-5) Inferir relevant_doc_ids nos chunks para ranking.
+Modos suportados:
 
-Persistencia
+- `classical`
+- `quantum`
+- `compare`
 
-Tabelas funcionais
-- users
-- conversations
-- messages
-- documents
-- ground_truth
-- dataset_snapshots (snapshot persistido do dataset usado na indexacao: metadados, lista completa de doc_ids e queries; endpoint expõe preview de documentos)
+Comportamento atual (importante para evitar confusao com docs antigos):
 
-Gabarito e inferencia de relevantes
-- Entrada do usuario: query_text e ideal_answer.
-- Backend tokeniza texto e calcula overlap com documentos.
-- Score ponderado por pergunta e resposta ideal.
-- Seleciona top documentos como relevant_doc_ids.
+- Nao existe re-ranking por `candidate_k`
+- Nao existe swap test
+- Nao existe projeccao para 64 dimensoes
+- Nao existe busca por arquivo ativa (`/search/file` retorna `410`)
+- Ambos pipelines fazem ranking completo no dataset pela coluna vetorial correspondente
 
-Metricas
+Pipeline classico:
 
-Ranking
-- accuracy_at_k
-- recall_at_k
-- mrr
-- ndcg_at_k
+1. Encode da query com `SbertEncoder`
+2. Busca em `documents.embedding_vector`
+3. Score por similaridade cosseno
+4. Ordenacao descrescente por score
 
-Resposta
-- answer_similarity
+Pipeline quantico-inspirado:
 
-Operacao
-- latency_ms
+1. Encode da query com `PennyLaneQuantumEncoder`
+2. Busca em `documents.quantum_vector`
+3. Score por similaridade cosseno
+4. Ordenacao descrescente por score
 
-Campos de controle
-- has_labels
-- has_ideal_answer
-- k
-- candidate_k
+Modo `compare` retorna tambem:
 
-Fallbacks e limites
-- Resposta fallback por baixa relevancia: Nao foi possivel consultar.
-- Limiar: SEARCH_MIN_RELEVANCE_SCORE.
-- Rate limit: 10 requisicoes por minuto por host nas rotas de busca.
-- /search/file foi removido (retorna 410).
+- `comparison.classical`
+- `comparison.quantum`
+- `comparison_metrics` com `common_doc_ids` e medias de score
 
-Seguranca
-- Autenticacao JWT.
-- Hash de senha com bcrypt.
-- Endpoints de conversa e mensagens protegidos por usuario autenticado.
+### 4) Chat persistido
 
-Configuracao
+Fluxo usado pelo frontend (`frontend/src/pages/Chat.tsx`):
 
-Variaveis principais
-- APP_ENV
-- SECRET_KEY
-- JWT_SECRET
-- JWT_ALGORITHM
-- ACCESS_TOKEN_EXPIRE_MINUTES
-- DB_HOST
-- DB_PORT
-- DB_NAME
-- DB_USER
-- DB_PASSWORD
-- DATABASE_URL
-- VITE_API_BASE_URL
-- EMBEDDER_PROVIDER
-- GEMINI_API_KEY
-- GEMINI_EMBEDDING_MODEL
+1. Cria conversa (se ainda nao houver uma ativa)
+2. Salva mensagem do usuario
+3. Garante indexacao do dataset Reuters (com polling)
+4. Executa busca comparativa
+5. Salva mensagem `assistant` textual resumindo resultados
+6. Armazena ultima resposta completa em `localStorage` para renderizar os paineis
 
-Variaveis funcionais
-- DEFAULT_DATASET_ID
-- SEARCH_MIN_RELEVANCE_SCORE
+Tambem existe persistencia estruturada pelo backend:
 
-Procedimento operacional recomendado
-1) Subir servicos.
-2) Registrar e autenticar usuario.
-3) Cadastrar gabaritos.
-4) Indexar dataset.
-5) Executar compare classico x quantico.
-6) Avaliar metrics e algorithm_details.
-7) Repetir com novos casos de teste.
+- `POST /api/search` com `chat_id` salva um payload JSON de retrieval como mensagem `assistant`
 
-Tecnologias e bibliotecas
+## Avaliacao e gabaritos (estado real)
 
-Backend
-- Python, FastAPI, Uvicorn.
-- SQLAlchemy, psycopg, pgvector.
-- NumPy, SciPy, pandas, scikit-learn.
-- PennyLane, Qiskit, Qiskit Aer.
-- pypdf.
-- python-jose, passlib, bcrypt.
+### Ground truth
 
-Frontend
-- React, TypeScript, Vite.
-- React Router.
-- Tailwind CSS.
-- Radix UI.
-- TanStack React Query.
+Tabela: `ground_truth`
 
-Infra
-- Docker Compose.
-- Container Postgres com imagem pgvector/pgvector:pg16.
+Campos usados:
 
-Limitacoes atuais
-- Dataset ainda pequeno para inferencias estatisticas amplas.
-- Simulacao quantica em software, nao hardware quantico real.
-- CORS aberto para qualquer origem no ambiente atual.
+- `dataset`
+- `query_id`
+- `query_text`
+- `relevant_doc_ids`
+- `user_id` (opcional)
 
-Evolucoes recomendadas
-- Ampliar base de dados e variedade de gabaritos.
-- Criar benchmark batch para regressao continua.
-- Construir dashboard historico de runs e metricas.
-- Endurecer configuracao de seguranca para producao.
+### Cadastro de gabaritos
+
+- API canonica: `POST /api/ground-truth`
+- API compativel usada pelo frontend: `POST /benchmarks/labels`
+
+Importante sobre `ideal_answer`:
+
+- O frontend envia `ideal_answer`
+- A rota compativel atual NAO persiste `ideal_answer`
+- Se `relevant_doc_ids` nao forem enviados, o backend infere um ground truth inicial usando busca classica top-5 e salva esses `doc_ids`
+
+### Avaliacao batch
+
+Caso de uso: `EvaluateUseCase`
+
+Fluxo:
+
+1. Le `ground_truth` do dataset
+2. Executa busca por `query_text` no(s) pipeline(s)
+3. Calcula metricas por query
+4. Agrega medias por pipeline
+
+Metricas realmente calculadas hoje:
+
+- `precision_at_k`
+- `recall_at_k`
+- `ndcg_at_k`
+- `spearman`
+
+Campos existentes nas respostas de busca (`metrics`) mas ainda nao implementados como metrica real:
+
+- `accuracy_at_k` -> `null`
+- `f1_at_k` -> `null`
+- `mrr` -> `null`
+- `answer_similarity` -> `null`
+
+## API (resumo de operacao)
+
+### Rotas canonicas (`/api/*`)
+
+- `GET /api/health`
+- `POST /api/auth/signup`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
+- `POST /api/auth/forgot-password`
+- `POST /api/auth/reset-password`
+- `POST /api/auth/refresh`
+- `POST|GET /api/chats`
+- `GET|PATCH|DELETE /api/chats/{chat_id}`
+- `POST /api/chats/{chat_id}/messages`
+- `POST /api/index`
+- `POST /api/search`
+- `POST /api/ground-truth`
+- `POST /api/evaluate`
+
+### Rotas compativeis (sem `/api`) expostas para o frontend atual
+
+- `/auth/*`
+- `/conversations*`
+- `/search/dataset/index`
+- `/search/dataset/index/status`
+- `/search/dataset`
+- `/datasets*`
+- `/benchmarks/labels*`
+
+Rota descontinuada mantida apenas para compatibilidade de erro:
+
+- `POST /search/file` -> `410 Gone`
+
+## Seguranca
+
+- Senhas com `passlib` (`bcrypt_sha256`/`bcrypt`)
+- JWT access + refresh com `python-jose`
+- `OAuth2PasswordBearer` no FastAPI
+- Chats, indexacao e busca exigem usuario autenticado
+- `require_admin_for_indexing` pode exigir admin na indexacao
+
+## Configuracao (variaveis reais do backend)
+
+Arquivo: `core/src/infrastructure/config.py`
+
+### Aplicacao
+
+- `APP_ENV`
+- `APP_NAME`
+- `CORS_ORIGINS`
+
+### Banco
+
+- `DATABASE_URL`
+
+### Auth/JWT
+
+- `JWT_SECRET`
+- `JWT_ALGORITHM`
+- `ACCESS_TOKEN_EXPIRE_MINUTES`
+- `REFRESH_TOKEN_EXPIRE_MINUTES`
+- `PASSWORD_RESET_EXPIRE_MINUTES`
+
+### Retrieval / encoders
+
+- `EMBEDDING_DIM` (default `384`)
+- `QUANTUM_DIM` (default `16`)
+- `QUANTUM_N_QUBITS` (default `4`)
+- `CLASSICAL_MODEL_NAME`
+- `SEED`
+
+### Controle de acesso
+
+- `REQUIRE_AUTH_FOR_INDEXING`
+- `REQUIRE_ADMIN_FOR_INDEXING`
+
+### Frontend
+
+- `VITE_API_BASE_URL` (consumido em `frontend/src/lib/api.ts`)
+
+## Banco de dados (resumo)
+
+Tabelas principais:
+
+- `users`
+- `password_resets`
+- `chats`
+- `chat_messages`
+- `documents`
+- `ground_truth`
+- `dataset_snapshots`
+
+Detalhes em `DB_SCHEMA.md`.
+
+## Limitacoes atuais
+
+- Apenas provider Reuters (NLTK) implementado
+- `ideal_answer` nao participa da avaliacao no backend atual
+- `answer_similarity`, `mrr`, `f1_at_k`, `accuracy_at_k` ainda retornam `null`
+- Custo de indexacao pode ser alto no Reuters completo (sBERT local + corpus inteiro)
+- Pipeline quantico e quantico-inspirado em simulacao (PennyLane), nao hardware quantico real
+
+## Referencias de implementacao
+
+- Busca e avaliacao: `core/src/application/ir_use_cases.py`
+- Metricas: `core/src/infrastructure/metrics/sklearn_metrics.py`
+- Encoders: `core/src/infrastructure/encoders/classical.py`, `core/src/infrastructure/encoders/quantum.py`
+- Rotas: `core/src/infrastructure/api/routers/api_router.py`
+- Frontend API client: `frontend/src/lib/api.ts`

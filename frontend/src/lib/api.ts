@@ -112,8 +112,6 @@ export interface SearchResponse {
   comparison?: SearchComparison;
   comparison_metrics?: {
     top_k: number;
-    overlap_at_k: number;
-    jaccard_at_k: number;
     common_doc_ids: string[];
     classical_mean_score: number;
     quantum_mean_score: number;

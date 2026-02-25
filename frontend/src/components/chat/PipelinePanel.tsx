@@ -20,11 +20,6 @@ export function PipelinePanel({ response }: PipelinePanelProps) {
 
   const classicalCount = response.comparison.classical.results?.length ?? 0;
   const quantumCount = response.comparison.quantum.results?.length ?? 0;
-  const overlap = response.comparison_metrics?.overlap_at_k ?? new Set(
-    (response.comparison.classical.results ?? [])
-      .map((item) => item.doc_id)
-      .filter((id) => (response.comparison.quantum.results ?? []).some((q) => q.doc_id === id))
-  ).size;
   const classicalLatency = response.comparison.classical.metrics?.latency_ms;
   const quantumLatency = response.comparison.quantum.metrics?.latency_ms;
 
@@ -45,7 +40,7 @@ export function PipelinePanel({ response }: PipelinePanelProps) {
           <div className='rounded-lg border border-border bg-card px-3 py-2 text-xs'>
             <div className='text-muted-foreground'>Resumo da recuperacao</div>
             <div className='mt-1 text-foreground'>
-              Classico: {classicalCount} docs | Quantico: {quantumCount} docs | Sobreposicao top-k: {overlap}
+              Classico: {classicalCount} docs | Quantico: {quantumCount} docs
             </div>
             {(classicalLatency !== undefined && quantumLatency !== undefined) && (
               <div className='mt-1 text-muted-foreground'>

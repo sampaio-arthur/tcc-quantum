@@ -113,18 +113,6 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                     <td className='py-2 pr-3'>{quantumResults.length}</td>
                     <td className='py-2'>Top-k retornado por pipeline</td>
                   </tr>
-                  <tr className='border-b border-border/60'>
-                    <td className='py-2 pr-3 text-foreground'>Overlap@k</td>
-                    <td className='py-2 pr-3' colSpan={2}>{comparative?.overlap_at_k ?? '-'}</td>
-                    <td className='py-2'>Interseccao entre rankings classico e quantico</td>
-                  </tr>
-                  <tr>
-                    <td className='py-2 pr-3 text-foreground'>Jaccard@k</td>
-                    <td className='py-2 pr-3' colSpan={2}>
-                      {typeof comparative?.jaccard_at_k === 'number' ? (comparative.jaccard_at_k * 100).toFixed(1) + '%' : '-'}
-                    </td>
-                    <td className='py-2'>Similaridade entre conjuntos recuperados</td>
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -171,7 +159,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
         )}
 
         <p className='text-xs text-muted-foreground'>
-          O chat exibe proxies comparativos (latencia, overlap e scores) sem gabarito. Para metricas de IR canonicas (precision/recall/NDCG/Spearman), use avaliacao batch com ground truth.
+          O chat exibe proxies comparativos (latencia e scores) sem gabarito. Para metricas de IR canonicas (precision/recall/NDCG/Spearman), use avaliacao batch com ground truth.
         </p>
       </div>
     </div>

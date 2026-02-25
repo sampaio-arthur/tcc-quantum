@@ -45,7 +45,7 @@
 Observação:
 
 - métricas de IR canônicas são calculadas no fluxo de avaliação batch com `ground_truth`
-- no chat, a comparação usa proxies (latência, overlap, jaccard, mean score@k)
+- no chat, a comparacao usa proxies (latencia e mean score@k)
 
 ## Reprodutibilidade
 
