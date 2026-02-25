@@ -26,7 +26,7 @@ O sistema tambem inclui:
 ### Servicos em runtime
 
 - `core`: FastAPI + Uvicorn
-- `frontend`: Vite (Docker exposto em `5173`; `vite.config.ts` usa `8080` no dev local do frontend)
+- `frontend`: Vite
 - `db`: PostgreSQL com imagem `pgvector/pgvector:pg16`
 
 ### Persistencia vetorial
