@@ -26,7 +26,7 @@ O sistema tambem inclui:
 ### Servicos em runtime
 
 - `core`: FastAPI + Uvicorn
-- `frontend`: Vite (Docker exposto em `5173`; `vite.config.ts` usa `8080` no dev local do frontend)
+- `frontend`: Vite
 - `db`: PostgreSQL com imagem `pgvector/pgvector:pg16`
 
 ### Persistencia vetorial
@@ -73,14 +73,6 @@ Modos suportados:
 - `classical`
 - `quantum`
 - `compare`
-
-Comportamento atual (importante para evitar confusao com docs antigos):
-
-- Nao existe re-ranking por `candidate_k`
-- Nao existe swap test
-- Nao existe projeccao para 64 dimensoes
-- Nao existe busca por arquivo ativa (`/search/file` retorna `410`)
-- Ambos pipelines fazem ranking completo no dataset pela coluna vetorial correspondente
 
 Pipeline classico:
 
