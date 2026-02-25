@@ -63,7 +63,7 @@ class Services:
     jwt: JoseJwtProvider
 
 
-def get_services(session: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> Services:
+def build_services(session: Session, settings: Settings) -> Services:
     users = SqlAlchemyUserRepository(session)
     resets = SqlAlchemyPasswordResetRepository(session)
     chats = SqlAlchemyChatRepository(session)
@@ -106,6 +106,10 @@ def get_services(session: Session = Depends(db_session), settings: Settings = De
         dataset_snapshots=dataset_snaps,
         jwt=jwt,
     )
+
+
+def get_services(session: Session = Depends(db_session), settings: Settings = Depends(get_settings)) -> Services:
+    return build_services(session, settings)
 
 
 def get_current_user_id(

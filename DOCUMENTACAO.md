@@ -26,7 +26,7 @@ Pipeline ponta a ponta
 
 Etapa 1 - Dataset
 - Fonte real: `Reuters-21578` via `nltk.corpus.reuters` (NLTK).
-- Recorte atual (reprodutivel no sistema): `max_docs=300` documentos e `max_queries=20` categorias/queries.
+- Padrão atual (reprodutivel no sistema): snapshot completo do Reuters-21578 (`max_docs=null`, `max_queries=null`, sem recorte).
 - Sem fallback local: se o corpus Reuters do NLTK nao estiver disponivel, o backend falha explicitamente e exige download/instalacao do corpus real.
 - Referencias:
 - `https://www.nltk.org/howto/corpus.html`
@@ -127,7 +127,7 @@ Tabelas funcionais
 - messages
 - documents
 - ground_truth
-- dataset_snapshots (snapshot persistido do dataset usado na indexacao: metadados, doc_ids e queries)
+- dataset_snapshots (snapshot persistido do dataset usado na indexacao: metadados, lista completa de doc_ids e queries; endpoint expõe preview de documentos)
 
 Gabarito e inferencia de relevantes
 - Entrada do usuario: query_text e ideal_answer.

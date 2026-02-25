@@ -37,7 +37,7 @@ Endpoint: `POST /api/evaluate`
 Dataset avaliado (configuração atual da aplicação):
 
 - `Reuters-21578` via `nltk.corpus.reuters` (NLTK)
-- recorte reprodutível: `max_docs=300`, `max_queries=20`
+- padrão atual: snapshot completo (`max_docs=null`, `max_queries=null`, sem recorte)
 - o backend persiste snapshot do dataset no banco na indexação (`dataset_snapshots`) para rastreabilidade/reprodutibilidade
 - sem fallback mini-dataset local
 

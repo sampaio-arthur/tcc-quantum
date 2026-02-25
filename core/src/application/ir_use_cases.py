@@ -37,7 +37,7 @@ class IndexDatasetUseCase:
         self.quantum_encoder = quantum_encoder
         self.dataset_snapshots = dataset_snapshots
 
-    def execute(self, dataset_id: str) -> dict:
+    def execute(self, dataset_id: str, progress_callback=None) -> dict:
         dataset_meta = self.datasets.get_dataset(dataset_id)
         if not dataset_meta:
             raise NotFoundError("Dataset not found.")
@@ -59,9 +59,13 @@ class IndexDatasetUseCase:
             )
             if len(batch) >= 64:
                 total += self.documents.upsert_documents(batch)
+                if progress_callback is not None:
+                    progress_callback(total)
                 batch.clear()
         if batch:
             total += self.documents.upsert_documents(batch)
+            if progress_callback is not None:
+                progress_callback(total)
         query_snapshot = [
             {
                 "query_id": q["query_id"],

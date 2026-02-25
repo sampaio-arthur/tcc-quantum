@@ -9,6 +9,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from domain.entities import Document, SearchResult
 from domain.exceptions import ConflictError, DomainError, NotFoundError, UnauthorizedError, ValidationError
 from infrastructure.api.deps import Services, get_current_user_id, get_services
+from infrastructure.api.index_jobs import index_job_registry
 from infrastructure.api.schemas import (
     BenchmarkLabelInput,
     ChatCreateRequest,
@@ -235,7 +236,39 @@ def index_dataset(payload: IndexRequest, user_id: int = Depends(get_current_user
 
 @compat_router.post("/search/dataset/index")
 def compat_index_dataset(payload: IndexRequest, user_id: int = Depends(get_current_user_id), services: Services = Depends(get_services)):
-    return index_dataset(payload, user_id, services)
+    user = services.users.get_by_id(user_id)
+    if services.settings.require_admin_for_indexing and not (user and user.is_admin):
+        raise HTTPException(status_code=403, detail="Admin required")
+    state = index_job_registry.start(payload.dataset_id, force_reindex=payload.force_reindex)
+    return {"accepted": True, **state.to_dict()}
+
+
+@compat_router.get("/search/dataset/index/status")
+def compat_index_dataset_status(dataset_id: str, services: Services = Depends(get_services)):
+    state = index_job_registry.get(dataset_id)
+    if state.status == "idle":
+        snapshot = services.dataset_snapshots.get(dataset_id)
+        docs_count = services.documents.count_by_dataset(dataset_id)
+        if snapshot and docs_count > 0 and snapshot.document_count == docs_count:
+            return {
+                "dataset_id": dataset_id,
+                "status": "completed",
+                "indexed_count": docs_count,
+                "total_hint": snapshot.document_count,
+                "result": {
+                    "dataset_id": dataset_id,
+                    "indexed_count": docs_count,
+                    "skipped": True,
+                    "reason": "already_indexed",
+                    "snapshot_document_count": snapshot.document_count,
+                    "snapshot_query_count": snapshot.query_count,
+                },
+                "error": None,
+                "started_at": None,
+                "finished_at": None,
+                "updated_at": None,
+            }
+    return state.to_dict()
 
 
 def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Services) -> dict:
@@ -374,9 +407,12 @@ def get_dataset(dataset_id: str, services: Services = Depends(get_services)):
                 for q in snapshot.queries
             ],
             "snapshot_queries": snapshot.queries,
-            "documents": [{"doc_id": doc_id} for doc_id in snapshot.document_ids],
+            "documents": [{"doc_id": doc_id} for doc_id in snapshot.document_ids[:50]],
             "snapshot": {
                 "persisted": True,
+                "document_ids_count": len(snapshot.document_ids),
+                "documents_preview_count": min(len(snapshot.document_ids), 50),
+                "queries_count": len(snapshot.queries),
                 "created_at": _serialize_dt(snapshot.created_at),
                 "updated_at": _serialize_dt(snapshot.updated_at),
             },

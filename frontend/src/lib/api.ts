@@ -1,5 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000';
 const REQUEST_TIMEOUT_MS = 60000;
+const INDEX_POLL_INTERVAL_MS = 1500;
+const INDEX_WAIT_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface User {
   id: number;
@@ -119,6 +121,19 @@ export interface SearchResponse {
   algorithm_details?: SearchAlgorithmDetails;
 }
 
+export interface DatasetIndexStatus {
+  dataset_id: string;
+  status: 'idle' | 'running' | 'completed' | 'failed';
+  started_at?: string | null;
+  finished_at?: string | null;
+  updated_at?: string | null;
+  indexed_count?: number;
+  total_hint?: number | null;
+  error?: string | null;
+  result?: Record<string, unknown> | null;
+  accepted?: boolean;
+}
+
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('access_token');
@@ -206,8 +221,8 @@ class ApiClient {
   }
 
   async getMe(): Promise<User> {
-    const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: this.getHeaders(),
+    const response = await this.fetchWithTimeout(`${API_BASE_URL}/auth/me`, {
+      headers: this.getHeaders(false),
     });
 
     if (!response.ok) {
@@ -284,16 +299,59 @@ class ApiClient {
     return response.json();
   }
 
-  async indexDataset(datasetId: string, forceReindex = false): Promise<void> {
+  async startDatasetIndex(datasetId: string, forceReindex = false): Promise<DatasetIndexStatus> {
     const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/dataset/index`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ dataset_id: datasetId, force_reindex: forceReindex }),
-    });
+    }, REQUEST_TIMEOUT_MS);
 
     if (!response.ok) {
       const detail = await this.readErrorDetail(response, 'Erro ao indexar dataset');
       throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async getDatasetIndexStatus(datasetId: string): Promise<DatasetIndexStatus> {
+    const response = await this.fetchWithTimeout(
+      `${API_BASE_URL}/search/dataset/index/status?dataset_id=${encodeURIComponent(datasetId)}`,
+      {
+        headers: this.getHeaders(false),
+      },
+      REQUEST_TIMEOUT_MS
+    );
+
+    if (!response.ok) {
+      const detail = await this.readErrorDetail(response, 'Erro ao consultar status da indexacao');
+      throw new Error(detail);
+    }
+
+    return response.json();
+  }
+
+  async indexDataset(datasetId: string, forceReindex = false): Promise<void> {
+    let status = await this.getDatasetIndexStatus(datasetId);
+    if (forceReindex || status.status === 'idle' || status.status === 'failed') {
+      status = await this.startDatasetIndex(datasetId, forceReindex);
+    }
+
+    const startedAt = Date.now();
+    while (status.status === 'running') {
+      if (Date.now() - startedAt > INDEX_WAIT_TIMEOUT_MS) {
+        throw new Error('Indexacao em andamento, mas excedeu o tempo limite de espera no frontend');
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, INDEX_POLL_INTERVAL_MS));
+      status = await this.getDatasetIndexStatus(datasetId);
+    }
+
+    if (status.status === 'failed') {
+      throw new Error(status.error || 'Falha na indexacao do dataset');
+    }
+
+    if (status.status !== 'completed') {
+      throw new Error(`Status inesperado da indexacao: ${status.status}`);
     }
   }
 
