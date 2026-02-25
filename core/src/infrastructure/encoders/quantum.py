@@ -5,6 +5,7 @@ import math
 
 import numpy as np
 
+from domain.exceptions import ValidationError
 from domain.ir import l2_normalize
 
 try:
@@ -51,23 +52,12 @@ class PennyLaneQuantumEncoder:
 
         return circuit
 
-    def _fallback_probs(self, angles: np.ndarray) -> list[float]:
-        amps = []
-        for state in range(self.dim):
-            acc = 1.0
-            for i in range(self.n_qubits):
-                bit = (state >> i) & 1
-                theta = angles[i]
-                acc *= math.cos(theta / 2.0) if bit == 0 else math.sin(theta / 2.0)
-            amps.append(acc)
-        probs = np.square(np.array(amps, dtype=np.float64))
-        total = float(probs.sum()) or 1.0
-        return [float(x / total) for x in probs.tolist()]
-
     def encode(self, text: str) -> list[float]:
-        angles = self._angles_from_text(text)
         if self._qnode is None:
-            probs = self._fallback_probs(angles)
-        else:
+            raise ValidationError("Quantum encoder unavailable: PennyLane is not installed/loaded.")
+        angles = self._angles_from_text(text)
+        try:
             probs = [float(x) for x in self._qnode(angles).tolist()]
+        except Exception as exc:
+            raise ValidationError(f"Quantum encoder failed to encode text: {exc}") from exc
         return l2_normalize([float(np.float32(x)) for x in probs])

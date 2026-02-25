@@ -128,14 +128,14 @@ class SearchUseCase:
                 "algorithm": "classical-sbert-cosine",
                 "comparator": "cosine similarity (score = 1 - cosine_distance)",
                 "candidate_strategy": "full dataset ranking in embedding_vector space",
-                "description": "Query and documents are encoded with the same classical encoder (sBERT or deterministic fallback), L2-normalized, and ranked by cosine similarity.",
+                "description": "Query and documents are encoded with the same classical encoder (sBERT), L2-normalized, and ranked by cosine similarity.",
                 "debug": {
                     "vector_space": "embedding_vector",
                     "encoder": "encode_embedding(text)",
                     "normalization": "L2",
                     "steps": [
                         "Recebe a pergunta em texto",
-                        "Transforma a pergunta em embedding classico (sBERT/fallback)",
+                        "Transforma a pergunta em embedding classico (sBERT)",
                         "Usa o mesmo encoder classico usado na indexacao dos documentos",
                         "Consulta a coluna embedding_vector no banco",
                         "Calcula similaridade cosseno e ordena por score",
@@ -147,7 +147,7 @@ class SearchUseCase:
             "algorithm": "quantum-probability-cosine",
             "comparator": "cosine similarity (score = 1 - cosine_distance)",
             "candidate_strategy": "full dataset ranking in quantum_vector space",
-            "description": "Query and documents are encoded with the same deterministic quantum-inspired encoder (PennyLane probabilities / fallback), L2-normalized, and ranked by cosine similarity.",
+            "description": "Query and documents are encoded with the same deterministic quantum-inspired encoder (PennyLane probabilities), L2-normalized, and ranked by cosine similarity.",
             "debug": {
                 "vector_space": "quantum_vector",
                 "encoder": "encode_quantum(text)",
