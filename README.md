@@ -31,7 +31,6 @@ Exemplo funcional para desenvolvimento local/Docker:
 ```env
 APP_ENV=dev
 APP_NAME=quantum-semantic-search
-CORS_ORIGINS=["http://localhost:5173","http://localhost:8080"]
 
 DB_SCHEME=postgresql+psycopg
 DB_HOST=db
