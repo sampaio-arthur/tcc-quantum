@@ -35,12 +35,6 @@ Este arquivo descreve as dependencias declaradas no projeto e o uso real no codi
 | `pytest` | `core/tests/test_api_flow.py`, `core/pytest.ini` | Runner de testes |
 | `httpx` | usado pelo `fastapi.testclient`/Starlette | Dependencia de suporte para `TestClient` em testes |
 
-### Observacoes importantes (backend)
-
-- Nao ha uso de `qiskit`, `qiskit-aer`, `pandas` ou `pypdf` no codigo atual.
-- O encoder classico e o quantico falham explicitamente se as libs/modelos nao puderem ser carregados; nao ha fallback deterministico local no codigo atual.
-- `psycopg` pode nao ser exercitado em testes locais se `DATABASE_URL` estiver em SQLite.
-
 ## Frontend (`frontend/package.json`)
 
 ### Runtime usado diretamente no app atual (rotas/paginas/fluxo principal)
