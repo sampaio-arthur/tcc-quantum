@@ -122,10 +122,4 @@ Uso tipico dessas libs no projeto:
 | --- | --- | --- |
 | `Docker Compose` | `docker-compose.yml` | Orquestra `core`, `frontend`, `db` |
 | `pgvector/pgvector:pg16` | servico `db` em `docker-compose.yml` | Postgres com extensao `vector` |
-| `Makefile` | `Makefile` | Atalhos de operacao (ver arquivo) |
-
-## Como usar este arquivo na manutencao
-
-- Ao adicionar/remover dependencia, atualize tambem o campo "onde e usada" com arquivo(s) concretos.
-- Se uma dependencia ficar apenas no template UI e nao for usada nas paginas, marque como tal (evita confusao de escopo).
-- Antes de remover dependencias do frontend, confira `frontend/src/components/ui/*.tsx` e `components.json` (muitas foram geradas pelo shadcn e podem ser reaproveitadas depois).
+| `Makefile` | `Makefile` | Atalhos de operacao |
