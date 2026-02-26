@@ -33,7 +33,12 @@ APP_ENV=dev
 APP_NAME=quantum-semantic-search
 CORS_ORIGINS=["http://localhost:5173","http://localhost:8080"]
 
-DATABASE_URL=postgresql+psycopg://tcc:tcc@db:5432/tcc
+DB_SCHEME=postgresql+psycopg
+DB_HOST=db
+DB_PORT=5432
+DB_NAME=tcc
+DB_USER=tcc
+DB_PASSWORD=tcc
 
 JWT_SECRET=troque-esta-chave
 JWT_ALGORITHM=HS256

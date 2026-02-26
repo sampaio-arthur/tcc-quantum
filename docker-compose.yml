@@ -36,9 +36,9 @@ services:
     container_name: quantum_search_postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_DB=tcc
-      - POSTGRES_USER=tcc
-      - POSTGRES_PASSWORD=tcc
+      - POSTGRES_DB=${DB_NAME:-tcc}
+      - POSTGRES_USER=${DB_USER:-tcc}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-tcc}
     ports:
       - "5432:5432"
     volumes:

@@ -1,4 +1,8 @@
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL as string) || 'http://localhost:8000';
+const ENV_API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string | undefined;
+if (import.meta.env.PROD && !ENV_API_BASE_URL) {
+  throw new Error('VITE_API_BASE_URL must be configured in production builds');
+}
+const API_BASE_URL = ENV_API_BASE_URL || 'http://localhost:8000';
 const REQUEST_TIMEOUT_MS = 60000;
 const INDEX_POLL_INTERVAL_MS = 1500;
 const INDEX_WAIT_TIMEOUT_MS = 15 * 60 * 1000;

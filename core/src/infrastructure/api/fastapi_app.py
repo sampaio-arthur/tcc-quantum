@@ -16,7 +16,7 @@ def create_app() -> FastAPI:
         raise RuntimeError("quantum_dim must match 2**quantum_n_qubits for deterministic quantum encoder.")
     init_db(settings)
 
-    app = FastAPI(title="Quantum Comparative Retrieval API", version="0.1.0")
+    app = FastAPI(title=settings.app_name, version="0.1.0")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
