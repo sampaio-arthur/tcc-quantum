@@ -14,15 +14,20 @@ except Exception:  # pragma: no cover
 class VectorType(TypeDecorator):
     impl = JSON
     cache_ok = True
+    # Expose pgvector SQLAlchemy comparator methods (e.g., cosine_distance)
+    # on ORM columns that use this TypeDecorator.
+    comparator_factory = PgVector.comparator_factory if PgVector is not None else TypeDecorator.Comparator
 
     def __init__(self, dim: int, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.dim = dim
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql" and PgVector is not None:
-            return dialect.type_descriptor(PgVector(self.dim))
-        return dialect.type_descriptor(JSON())
+        if dialect.name != "postgresql":
+            raise RuntimeError("VectorType requires PostgreSQL with pgvector.")
+        if PgVector is None:
+            raise RuntimeError("pgvector.sqlalchemy is required for PostgreSQL vector columns.")
+        return dialect.type_descriptor(PgVector(self.dim))
 
     def process_bind_param(self, value, dialect):
         if value is None:

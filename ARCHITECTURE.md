@@ -32,5 +32,4 @@ Clean Architecture com separação em:
 
 ## Observações
 
-- Em PostgreSQL + pgvector, a busca usa `cosine_distance` quando disponível
-- Em SQLite/testes, há fallback de cálculo de similaridade em Python
+- A busca usa PostgreSQL + pgvector com `cosine_distance`

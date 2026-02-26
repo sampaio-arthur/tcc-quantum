@@ -59,23 +59,16 @@ class Settings(BaseSettings):
     def __init__(self, **data):
         super().__init__(**data)
 
-        # Backward-compatible resolution:
-        # 1) explicit DATABASE_URL (if non-empty)
-        # 2) fragmented DB_* variables (if any were provided)
-        # 3) sqlite local default
-        fields_set = set(getattr(self, "model_fields_set", set()) or getattr(self, "__fields_set__", set()))
-        has_db_parts_configured = bool(fields_set & {"db_scheme", "db_host", "db_port", "db_name", "db_user", "db_password"})
-
         if (self.database_url or "").strip():
             resolved_database_url = self.database_url
-        elif has_db_parts_configured:
+        else:
             user = quote_plus(self.db_user)
             password = quote_plus(self.db_password)
             resolved_database_url = f"{self.db_scheme}://{user}:{password}@{self.db_host}:{self.db_port}/{self.db_name}"
-        else:
-            resolved_database_url = "sqlite:///./app.db"
 
         self.database_url = resolved_database_url
+        if not self.database_url.lower().startswith("postgresql"):
+            raise ValueError("Only PostgreSQL is supported. Configure DATABASE_URL or DB_* with a postgresql URL.")
         if self.app_env.lower() not in {"dev", "development", "test"} and self.jwt_secret.strip() == "change-me":
             raise ValueError("JWT_SECRET must be configured in non-development environments.")
 

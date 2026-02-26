@@ -80,18 +80,6 @@ O banco ordena por `cosine_distance` e o backend expoe:
 
 - `score = 1 - cosine_distance(query_vector, doc_vector)`
 
-### 2.2 Fallback em SQLite/testes (Python)
-
-Funcao `_cosine_score(a, b)`:
-
-- Produto interno: `dot = sum(ai * bi)`
-- Normas: `||a||2`, `||b||2`
-- Score: `cosine(a,b) = dot / (||a||2 * ||b||2)`
-
-Observacao:
-
-- Se alguma norma der zero, o codigo usa divisor `1.0` para evitar divisao por zero.
-
 ## 3. Encoder classico (sBERT)
 
 Arquivo: `core/src/infrastructure/encoders/classical.py`

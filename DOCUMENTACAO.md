@@ -31,8 +31,7 @@ O sistema tambem inclui:
 
 ### Persistencia vetorial
 
-- PostgreSQL: `pgvector` via `VectorType`
-- SQLite/testes: fallback JSON + score cosseno calculado em Python
+- PostgreSQL + pgvector via `VectorType` e `cosine_distance`
 
 ## Fluxo ponta a ponta
 
@@ -212,7 +211,13 @@ Arquivo: `core/src/infrastructure/config.py`
 
 ### Banco
 
-- `DATABASE_URL`
+- `DB_SCHEME`
+- `DB_HOST`
+- `DB_PORT`
+- `DB_NAME`
+- `DB_USER`
+- `DB_PASSWORD`
+- `DATABASE_URL` (override opcional)
 
 ### Auth/JWT
 

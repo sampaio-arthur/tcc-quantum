@@ -88,5 +88,4 @@ Constraint:
 
 ## Vetores
 
-- Em PostgreSQL: `pgvector` via `VectorType`
-- Em SQLite/testes: fallback JSON para facilitar execução local
+- PostgreSQL + pgvector via `VectorType`

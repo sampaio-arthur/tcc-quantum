@@ -16,8 +16,7 @@ def get_engine(settings: Settings | None = None):
     global _engine
     if _engine is None:
         cfg = settings or get_settings()
-        connect_args = {"check_same_thread": False} if cfg.database_url.startswith("sqlite") else {}
-        _engine = create_engine(cfg.database_url, future=True, pool_pre_ping=True, connect_args=connect_args)
+        _engine = create_engine(cfg.database_url, future=True, pool_pre_ping=True)
     return _engine
 
 
@@ -30,9 +29,10 @@ def get_session_factory(settings: Settings | None = None):
 
 def init_db(settings: Settings | None = None) -> None:
     engine = get_engine(settings)
-    if engine.dialect.name == "postgresql":
-        with engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+    if engine.dialect.name != "postgresql":
+        raise RuntimeError("Only PostgreSQL is supported.")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
 
 

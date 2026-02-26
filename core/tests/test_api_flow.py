@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import importlib
 import os
-from pathlib import Path
-
+import pytest
 from fastapi.testclient import TestClient
 
 
-def _boot_app(tmp_path: Path):
-    db_path = tmp_path / "test.db"
-    os.environ["DATABASE_URL"] = f"sqlite:///{db_path}"
+def _boot_app():
+    test_database_url = os.getenv("TEST_DATABASE_URL") or os.getenv("DATABASE_URL")
+    if not test_database_url:
+        pytest.skip("TEST_DATABASE_URL or DATABASE_URL must be configured for PostgreSQL integration test.")
+    os.environ["DATABASE_URL"] = test_database_url
     os.environ["JWT_SECRET"] = "test-secret"
     os.environ["ACCESS_TOKEN_EXPIRE_MINUTES"] = "60"
 
@@ -36,8 +37,8 @@ def _auth_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_minimal_required_flow(tmp_path: Path):
-    app = _boot_app(tmp_path)
+def test_minimal_required_flow():
+    app = _boot_app()
     client = TestClient(app)
     headers = _auth_headers(client)
 

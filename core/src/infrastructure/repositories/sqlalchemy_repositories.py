@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from math import sqrt
 
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
@@ -24,17 +23,6 @@ from infrastructure.db.models import (
     PasswordResetModel,
     UserModel,
 )
-
-
-def _cosine_score(a: list[float], b: list[float]) -> float:
-    if not a or not b:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b))
-    na = sqrt(sum(x * x for x in a)) or 1.0
-    nb = sqrt(sum(y * y for y in b)) or 1.0
-    return float(dot / (na * nb))
-
-
 class SqlAlchemyUserRepository(UserRepositoryPort):
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -207,34 +195,19 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
     def _search(self, dataset: str, query_vector: list[float], top_k: int, field: str) -> list[SearchResult]:
         dialect = self.session.bind.dialect.name if self.session.bind else ""
         column = getattr(DocumentModel, field)
-        if dialect == "postgresql" and hasattr(column, "cosine_distance"):
-            stmt = (
-                select(DocumentModel, (1 - column.cosine_distance(query_vector)).label("score"))
-                .where(DocumentModel.dataset == dataset)
-                .order_by(column.cosine_distance(query_vector))
-                .limit(top_k)
-            )
-            rows = self.session.execute(stmt).all()
-            return [
-                SearchResult(doc_id=row.DocumentModel.doc_id, text=row.DocumentModel.text, score=float(row.score), metadata=row.DocumentModel.metadata_json or {})
-                for row in rows
-            ]
-        rows = self.session.scalars(select(DocumentModel).where(DocumentModel.dataset == dataset)).all()
-        scored = []
-        for row in rows:
-            vec = getattr(row, field)
-            if vec is None:
-                continue
-            scored.append(
-                SearchResult(
-                    doc_id=row.doc_id,
-                    text=row.text,
-                    score=_cosine_score(query_vector, vec),
-                    metadata=row.metadata_json or {},
-                )
-            )
-        scored.sort(key=lambda x: x.score, reverse=True)
-        return scored[:top_k]
+        if dialect != "postgresql" or not hasattr(column, "cosine_distance"):
+            raise RuntimeError("Search requires PostgreSQL + pgvector cosine_distance support.")
+        stmt = (
+            select(DocumentModel, (1 - column.cosine_distance(query_vector)).label("score"))
+            .where(DocumentModel.dataset == dataset)
+            .order_by(column.cosine_distance(query_vector))
+            .limit(top_k)
+        )
+        rows = self.session.execute(stmt).all()
+        return [
+            SearchResult(doc_id=row.DocumentModel.doc_id, text=row.DocumentModel.text, score=float(row.score), metadata=row.DocumentModel.metadata_json or {})
+            for row in rows
+        ]
 
 
 class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
