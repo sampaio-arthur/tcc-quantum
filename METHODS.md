@@ -1,30 +1,30 @@
 # Methods
 
-## Pipeline 1 - Clássico (sBERT)
+## Pipeline 1 - Classico (sBERT)
 
 - Encoder: `SbertEncoder` (`core/src/infrastructure/encoders/classical.py`)
-- Função única: `encode(text)` usada para documentos e queries
-- Saída: vetor real denso
-- Normalização: L2 explícita
+- Funcao unica: `encode(text)` usada para documentos e queries
+- Saida: vetor real denso
+- Normalizacao: L2 explicita
 
-## Pipeline 2 - Quântico-inspirado (PennyLane)
+## Pipeline 2 - Quantico-inspirado (PennyLane)
 
 - Encoder: `PennyLaneQuantumEncoder` (`core/src/infrastructure/encoders/quantum.py`)
-- Função única: `encode(text)` usada para documentos e queries
-- Não usa embeddings sBERT
+- Funcao unica: `encode(text)` usada para documentos e queries
+- Nao usa embeddings sBERT
 
-### Especificação atual
+### Especificacao atual
 
-- `n_qubits`: configurável (default `4`)
-- Dimensão da saída: `2 ** n_qubits` (default `16`)
-- Mapeamento texto -> parâmetros:
+- `n_qubits`: configuravel (default `4`)
+- Dimensao da saida: `2 ** n_qubits` (default `16`)
+- Mapeamento texto -> parametros:
   - hash SHA-256 por token
-  - agregação determinística em ângulos
+  - agregacao deterministica em angulos
 - Circuito:
   - `AngleEmbedding` (Y)
   - cadeia de `CNOT`
   - `RZ` por qubit
-  - medição de probabilidades (`qml.probs`)
+  - medicao de probabilidades (`qml.probs`)
 - Vetor final:
   - probabilidades reais `float32`
   - L2-normalizado
@@ -35,22 +35,22 @@
 - Similaridade alvo no banco: cosseno via pgvector (`cosine_distance`)
 - `score = 1 - cosine_distance`
 
-## Métricas (implementação)
+## Metricas (implementacao)
 
 - `precision@k` e `recall@k`: `sklearn.metrics.precision_score` / `recall_score`
-  - construção de vetores binários sobre a união `top-k recuperado ∪ relevantes`
-- `ndcg@k`: `sklearn.metrics.ndcg_score` (ganho binário)
+  - construcao de vetores binarios sobre a uniao `top-k recuperado U relevantes`
+- `ndcg@k`: `sklearn.metrics.ndcg_score` (ganho binario)
 - `spearman`: `scipy.stats.spearmanr`
 
-Observação:
+Observacao:
 
-- métricas de IR canônicas são calculadas no fluxo de avaliação batch com `ground_truth`
+- metricas de IR canonicas sao calculadas no fluxo de avaliacao batch com `ground_truth`
 - no chat, a comparacao usa proxies (latencia e mean score@k)
 
 ## Reprodutibilidade
 
-- `encode_quantum` determinístico
-- Sem amostragem aleatória
+- `encode_quantum` deterministico
+- Sem amostragem aleatoria
 - Hashes e mapeamento fixos
 
 ## Formulas e Calculos (Algoritmos e Metricas)

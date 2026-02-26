@@ -1,9 +1,22 @@
 # TCC - Quantum Comparative Retrieval (Classical vs Quantum-Inspired)
 
-Aplicacao full-stack para comparar retrieval semantico em dois pipelines sobre o dataset Reuters:
+Aplicacao full-stack para comparar busca semantica em dois tipos de vetorizacao sobre o dataset Reuters:
 
-- Classico (`sBERT`) em `documents.embedding_vector`
-- Quantico-inspirado (`PennyLane`) em `documents.quantum_vector`
+- Busca semantica classica por embeddings (`sBERT`) em `documents.embedding_vector`
+- Busca semantica por vetorizacao quantica simulada / quantico-inspirada (`PennyLane`) em `documents.quantum_vector`
+
+## Objetivo do projeto
+
+Implementar e comparar dois fluxos de busca semantica sobre o mesmo dataset e com o mesmo criterio de ranking (similaridade cosseno), mudando a representacao vetorial:
+
+- Pipeline classico: texto -> embedding denso real via `sentence-transformers` (`sBERT`)
+- Pipeline quantico-inspirado: texto -> vetor real deterministico derivado de simulacao quantica no `PennyLane` (probabilidades do circuito), sem usar embedding sBERT
+
+Objetivo da comparacao:
+
+- analisar diferencas de retrieval entre representacao por embeddings e representacao quantica-inspirada
+- comparar proxies de custo (latencia)
+- permitir avaliacao batch com ground truth (precision/recall/NDCG/Spearman)
 
 Inclui:
 
@@ -89,7 +102,7 @@ Servicos:
 5. O frontend vai:
    - criar conversa
    - garantir indexacao do dataset Reuters
-   - executar busca comparativa classico x quantico
+   - executar busca comparativa classico x quantico-inspirado
    - exibir paineis com latencia e scores
 
 Observacoes:

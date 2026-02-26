@@ -2,11 +2,11 @@
 
 ## Estilo
 
-Clean Architecture com separação em:
+Clean Architecture com separacao em:
 
 - `domain/`: entidades, value objects, regras e ports
-- `application/`: casos de uso (orquestração)
-- `infrastructure/`: adapters concretos (DB, JWT, bcrypt, encoders, métricas, dataset)
+- `application/`: casos de uso (orquestracao)
+- `infrastructure/`: adapters concretos (DB, JWT, bcrypt, encoders, metricas, dataset)
 - `infrastructure/api/`: delivery via FastAPI
 
 ## Principais Casos de Uso
@@ -15,21 +15,23 @@ Clean Architecture com separação em:
 - Chats: `CreateChatUseCase`, `ListChatsUseCase`, `GetChatUseCase`, `AddMessageUseCase`, `RenameChatUseCase`, `DeleteChatUseCase`
 - IR: `IndexDatasetUseCase`, `SearchUseCase`, `UpsertGroundTruthUseCase`, `EvaluateUseCase`
 
-## Princípios importantes aplicados
+## Principios importantes aplicados
 
-- Mesma função de encoding para indexação e busca por pipeline
-- Não mistura espaços vetoriais (colunas separadas no banco)
-- Dependências de framework ficam fora do domínio
-- Rotas finais e rotas compatíveis coexistem sem quebrar o front
+- Mesma funcao de encoding para indexacao e busca dentro de cada pipeline
+- Nao mistura espacos vetoriais (colunas separadas no banco)
+- Comparacao metodologica entre representacoes (classica vs quantico-inspirada) usando o mesmo criterio de ranking (cosseno)
+- Dependencias de framework ficam fora do dominio
+- Rotas finais e rotas compativeis coexistem sem quebrar o front
 
 ## Fluxo de Busca (compare)
 
 1. API recebe query + dataset + `mode`
 2. `SearchUseCase` chama `encode_embedding` e/ou `encode_quantum`
-3. Repositório consulta apenas a coluna correspondente
+3. Repositorio consulta apenas a coluna correspondente (`embedding_vector` ou `quantum_vector`)
 4. Retorna ranking com score (cosine similarity)
-5. Opcional: persistência de mensagem `assistant` no chat
+5. Opcional: persistencia de mensagem `assistant` no chat
 
-## Observações
+## Observacoes
 
 - A busca usa PostgreSQL + pgvector com `cosine_distance`
+- Os pipelines diferem na representacao vetorial (sBERT vs vetorizacao quantico-inspirada em PennyLane), nao no mecanismo de ranking
