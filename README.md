@@ -114,3 +114,7 @@ Referencias:
 - `DB_SCHEMA.md`
 - `DEPENDENCIES.md`
 
+## Duvidas
+
+- email: `arthurbarrasampaio@gmail.com`
+
