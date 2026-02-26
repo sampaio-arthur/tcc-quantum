@@ -40,6 +40,7 @@
 
 ### `documents`
 
+- `id`
 - `dataset`
 - `doc_id`
 - `text`
@@ -53,6 +54,7 @@ Constraint:
 
 ### `ground_truth`
 
+- `id`
 - `dataset`
 - `query_id`
 - `query_text`
@@ -66,6 +68,7 @@ Constraint:
 
 ### `dataset_snapshots`
 
+- `id`
 - `dataset_id` (UNIQUE)
 - `name`
 - `provider`
