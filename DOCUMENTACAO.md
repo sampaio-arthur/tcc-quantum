@@ -260,7 +260,6 @@ Detalhes em `DB_SCHEMA.md`.
 
 ## Limitacoes atuais
 
-- Apenas provider Reuters (NLTK) implementado
 - `ideal_answer` nao participa da avaliacao no backend atual
 - `answer_similarity`, `mrr`, `f1_at_k`, `accuracy_at_k` ainda retornam `null`
 - Custo de indexacao pode ser alto no Reuters completo (sBERT local + corpus inteiro)
