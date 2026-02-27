@@ -6,7 +6,7 @@ O frontend:
 
 - autentica usuarios
 - cria e persiste conversas
-- dispara indexacao do dataset Reuters
+- dispara indexacao do dataset BEIR local (`beir/trec-covid`)
 - executa busca comparativa entre:
   - pipeline classico por embeddings (sBERT)
   - pipeline quantico-inspirado por vetorizacao quantica simulada (PennyLane)

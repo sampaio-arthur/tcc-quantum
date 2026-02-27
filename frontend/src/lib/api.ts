@@ -5,7 +5,6 @@ if (import.meta.env.PROD && !ENV_API_BASE_URL) {
 const API_BASE_URL = ENV_API_BASE_URL || 'http://localhost:8000';
 const REQUEST_TIMEOUT_MS = 60000;
 const INDEX_POLL_INTERVAL_MS = 1500;
-const INDEX_WAIT_TIMEOUT_MS = 15 * 60 * 1000;
 
 export interface User {
   id: number;
@@ -16,6 +15,7 @@ export interface User {
 export interface LoginResponse {
   access_token: string;
   token_type: string;
+  refresh_token?: string;
 }
 
 export interface Conversation {
@@ -78,6 +78,7 @@ export interface SearchMetrics {
   f1_at_k?: number | null;
   mrr?: number | null;
   ndcg_at_k?: number | null;
+  spearman?: number | null;
   answer_similarity?: number | null;
   has_ideal_answer: boolean;
   latency_ms: number;
@@ -117,8 +118,6 @@ export interface SearchResponse {
   comparison_metrics?: {
     top_k: number;
     common_doc_ids: string[];
-    classical_mean_score: number;
-    quantum_mean_score: number;
   };
   algorithm_details?: SearchAlgorithmDetails;
 }
@@ -139,6 +138,78 @@ export interface DatasetIndexStatus {
 class ApiClient {
   private getToken(): string | null {
     return localStorage.getItem('access_token');
+  }
+
+  private getRefreshToken(): string | null {
+    return localStorage.getItem('refresh_token');
+  }
+
+  private setTokens(accessToken: string, refreshToken?: string): void {
+    localStorage.setItem('access_token', accessToken);
+    if (refreshToken) {
+      localStorage.setItem('refresh_token', refreshToken);
+    }
+  }
+
+  private withAuthHeader(headers?: HeadersInit): Headers {
+    const merged = new Headers(headers || {});
+    const token = this.getToken();
+    if (token) {
+      merged.set('Authorization', `Bearer ${token}`);
+    }
+    return merged;
+  }
+
+  private async tryRefreshAccessToken(): Promise<boolean> {
+    const refreshToken = this.getRefreshToken();
+    if (!refreshToken) {
+      return false;
+    }
+    const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!response.ok) {
+      this.logout();
+      return false;
+    }
+    const data = await response.json();
+    if (!data?.access_token) {
+      this.logout();
+      return false;
+    }
+    this.setTokens(data.access_token, data.refresh_token);
+    return true;
+  }
+
+  private async fetchWithAuth(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+    let response = await this.fetchWithTimeout(
+      input,
+      {
+        ...init,
+        headers: this.withAuthHeader(init.headers),
+      },
+      timeoutMs
+    );
+    if (response.status !== 401) {
+      return response;
+    }
+    const refreshed = await this.tryRefreshAccessToken();
+    if (!refreshed) {
+      return response;
+    }
+    response = await this.fetchWithTimeout(
+      input,
+      {
+        ...init,
+        headers: this.withAuthHeader(init.headers),
+      },
+      timeoutMs
+    );
+    return response;
   }
 
   private getHeaders(json = true): HeadersInit {
@@ -218,12 +289,12 @@ class ApiClient {
     }
 
     const data = await response.json();
-    localStorage.setItem('access_token', data.access_token);
+    this.setTokens(data.access_token, data.refresh_token);
     return data;
   }
 
   async getMe(): Promise<User> {
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/auth/me`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/auth/me`, {
       headers: this.getHeaders(false),
     });
 
@@ -236,10 +307,11 @@ class ApiClient {
 
   logout(): void {
     localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
   }
 
   async getConversations(): Promise<Conversation[]> {
-    const response = await fetch(`${API_BASE_URL}/conversations`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversations`, {
       headers: this.getHeaders(),
     });
 
@@ -251,7 +323,7 @@ class ApiClient {
   }
 
   async createConversation(title: string): Promise<Conversation> {
-    const response = await fetch(`${API_BASE_URL}/conversations`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversations`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ title }),
@@ -265,7 +337,7 @@ class ApiClient {
   }
 
   async deleteConversation(id: number): Promise<void> {
-    const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversations/${id}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     });
@@ -276,7 +348,7 @@ class ApiClient {
   }
 
   async getConversation(id: number): Promise<ConversationDetail> {
-    const response = await fetch(`${API_BASE_URL}/conversations/${id}`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversations/${id}`, {
       headers: this.getHeaders(),
     });
 
@@ -288,7 +360,7 @@ class ApiClient {
   }
 
   async addMessage(conversationId: number, role: 'user' | 'assistant' | 'system', content: string): Promise<Message> {
-    const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/conversations/${conversationId}/messages`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ role, content }),
@@ -302,7 +374,7 @@ class ApiClient {
   }
 
   async startDatasetIndex(datasetId: string, forceReindex = false): Promise<DatasetIndexStatus> {
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/dataset/index`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/search/dataset/index`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({ dataset_id: datasetId, force_reindex: forceReindex }),
@@ -339,11 +411,7 @@ class ApiClient {
       status = await this.startDatasetIndex(datasetId, forceReindex);
     }
 
-    const startedAt = Date.now();
     while (status.status === 'running') {
-      if (Date.now() - startedAt > INDEX_WAIT_TIMEOUT_MS) {
-        throw new Error('Indexacao em andamento, mas excedeu o tempo limite de espera no frontend');
-      }
       await new Promise((resolve) => window.setTimeout(resolve, INDEX_POLL_INTERVAL_MS));
       status = await this.getDatasetIndexStatus(datasetId);
     }
@@ -358,7 +426,7 @@ class ApiClient {
   }
 
   async searchDataset(query: string, datasetId: string, queryId?: string): Promise<SearchResponse> {
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/search/dataset`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/search/dataset`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify({
@@ -419,7 +487,7 @@ class ApiClient {
   }
 
   async upsertBenchmarkLabel(payload: BenchmarkLabelInput): Promise<BenchmarkLabel> {
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/benchmarks/labels`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/benchmarks/labels`, {
       method: 'POST',
       headers: this.getHeaders(),
       body: JSON.stringify(payload),
@@ -434,7 +502,7 @@ class ApiClient {
   }
 
   async deleteBenchmarkLabel(datasetId: string, benchmarkId: string): Promise<void> {
-    const response = await this.fetchWithTimeout(`${API_BASE_URL}/benchmarks/labels/${encodeURIComponent(datasetId)}/${encodeURIComponent(benchmarkId)}`, {
+    const response = await this.fetchWithAuth(`${API_BASE_URL}/benchmarks/labels/${encodeURIComponent(datasetId)}/${encodeURIComponent(benchmarkId)}`, {
       method: 'DELETE',
       headers: this.getHeaders(false),
     });

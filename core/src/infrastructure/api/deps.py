@@ -17,7 +17,7 @@ from application.chat_use_cases import AddMessageUseCase, CreateChatUseCase, Del
 from application.ir_use_cases import BuildAssistantRetrievalMessageUseCase, EvaluateUseCase, IndexDatasetUseCase, SearchUseCase, UpsertGroundTruthUseCase
 from domain.exceptions import UnauthorizedError
 from infrastructure.config import Settings, get_settings
-from infrastructure.datasets.reuters_provider import ReutersDatasetProvider
+from infrastructure.datasets.beir_local_provider import BeirLocalDatasetProvider
 from infrastructure.db.session import db_session
 from infrastructure.email.dev_notifier import DevLogNotifier
 from infrastructure.encoders.classical import SbertEncoder
@@ -77,7 +77,7 @@ def build_services(session: Session, settings: Settings) -> Services:
     reset_tokens = Sha256ResetTokenGenerator()
     embedding_encoder = SbertEncoder(settings.classical_model_name, settings.embedding_dim)
     quantum_encoder = PennyLaneQuantumEncoder(settings.quantum_n_qubits)
-    datasets = ReutersDatasetProvider()
+    datasets = BeirLocalDatasetProvider()
     metrics = SklearnMetricsAdapter()
 
     search_uc = SearchUseCase(docs, embedding_encoder, quantum_encoder)
@@ -98,7 +98,7 @@ def build_services(session: Session, settings: Settings) -> Services:
         add_message=AddMessageUseCase(chats),
         rename_chat=RenameChatUseCase(chats),
         delete_chat=DeleteChatUseCase(chats),
-        index_dataset=IndexDatasetUseCase(datasets, docs, embedding_encoder, quantum_encoder, dataset_snaps),
+        index_dataset=IndexDatasetUseCase(datasets, docs, embedding_encoder, quantum_encoder, dataset_snaps, gts),
         search=search_uc,
         upsert_ground_truth=UpsertGroundTruthUseCase(gts),
         evaluate=EvaluateUseCase(gts, search_uc, metrics),

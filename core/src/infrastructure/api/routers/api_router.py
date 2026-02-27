@@ -29,10 +29,12 @@ from infrastructure.api.schemas import (
     TokenOut,
     UserOut,
 )
+from infrastructure.metrics.sklearn_metrics import SklearnMetricsAdapter
 
 
 router = APIRouter(prefix="/api")
 compat_router = APIRouter()
+_metrics_adapter = SklearnMetricsAdapter()
 
 
 def _serialize_dt(value: Any) -> str | None:
@@ -71,6 +73,81 @@ def _handle_domain_error(exc: DomainError) -> HTTPException:
     if isinstance(exc, ValidationError):
         return HTTPException(status_code=400, detail=str(exc))
     return HTTPException(status_code=500, detail="Internal error")
+
+
+def _find_ground_truth(services: Services, dataset_id: str, query_id: str | None, query_text: str):
+    if query_id:
+        item = services.ground_truths.get(dataset_id, query_id)
+        if item:
+            return item
+    normalized = (query_text or "").strip().lower()
+    if not normalized:
+        return None
+    for item in services.ground_truths.list_by_dataset(dataset_id):
+        if (item.query_text or "").strip().lower() == normalized:
+            return item
+    return None
+
+
+def _enrich_metrics(existing: dict | None, evaluated, k: int) -> dict:
+    merged = dict(existing or {})
+    merged["precision_at_k"] = evaluated.precision_at_k
+    merged["recall_at_k"] = evaluated.recall_at_k
+    merged["ndcg_at_k"] = evaluated.ndcg_at_k
+    merged["spearman"] = evaluated.spearman
+    merged["k"] = k
+    merged["has_labels"] = True
+    merged["ground_truth_query_id"] = evaluated.query_id
+    return merged
+
+
+def _attach_ir_metrics(
+    output: dict[str, Any],
+    services: Services,
+    dataset_id: str,
+    query_id: str | None,
+    query_text: str,
+    k: int,
+) -> None:
+    gt = _find_ground_truth(services, dataset_id, query_id, query_text)
+    if not gt:
+        return
+    if "comparison" in output:
+        classical_results = output["comparison"]["classical"]["results"] or []
+        quantum_results = output["comparison"]["quantum"]["results"] or []
+        classical_eval = _metrics_adapter.evaluate_query(
+            query_id=gt.query_id,
+            query_text=gt.query_text,
+            pipeline="classical",
+            retrieved_doc_ids=[item["doc_id"] for item in classical_results],
+            retrieved_scores=[float(item["score"]) for item in classical_results],
+            relevant_doc_ids=gt.relevant_doc_ids,
+            k=k,
+        )
+        quantum_eval = _metrics_adapter.evaluate_query(
+            query_id=gt.query_id,
+            query_text=gt.query_text,
+            pipeline="quantum",
+            retrieved_doc_ids=[item["doc_id"] for item in quantum_results],
+            retrieved_scores=[float(item["score"]) for item in quantum_results],
+            relevant_doc_ids=gt.relevant_doc_ids,
+            k=k,
+        )
+        output["comparison"]["classical"]["metrics"] = _enrich_metrics(output["comparison"]["classical"].get("metrics"), classical_eval, k)
+        output["comparison"]["quantum"]["metrics"] = _enrich_metrics(output["comparison"]["quantum"].get("metrics"), quantum_eval, k)
+        return
+    if output.get("mode") in {"classical", "quantum"}:
+        results = output.get("results") or []
+        eval_result = _metrics_adapter.evaluate_query(
+            query_id=gt.query_id,
+            query_text=gt.query_text,
+            pipeline=output["mode"],
+            retrieved_doc_ids=[item["doc_id"] for item in results],
+            retrieved_scores=[float(item["score"]) for item in results],
+            relevant_doc_ids=gt.relevant_doc_ids,
+            k=k,
+        )
+        output["metrics"] = _enrich_metrics(output.get("metrics"), eval_result, k)
 
 
 @router.get("/health")
@@ -297,6 +374,7 @@ def _search_and_maybe_persist(payload: SearchRequest, user_id: int, services: Se
         }
     if result.get("comparison_metrics") is not None:
         output["comparison_metrics"] = result["comparison_metrics"]
+    _attach_ir_metrics(output, services, payload.dataset_id, payload.query_id, payload.query, payload.top_k)
     if payload.chat_id is not None:
         assistant_payload = services.build_assistant_message.execute(result)
         services.add_message.save_assistant_retrieval_result(user_id, payload.chat_id, assistant_payload)

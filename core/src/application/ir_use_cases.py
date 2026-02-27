@@ -30,12 +30,14 @@ class IndexDatasetUseCase:
         embedding_encoder: EncoderPort,
         quantum_encoder: EncoderPort,
         dataset_snapshots: DatasetSnapshotRepositoryPort | None = None,
+        ground_truths: GroundTruthRepositoryPort | None = None,
     ) -> None:
         self.datasets = datasets
         self.documents = documents
         self.embedding_encoder = embedding_encoder
         self.quantum_encoder = quantum_encoder
         self.dataset_snapshots = dataset_snapshots
+        self.ground_truths = ground_truths
 
     def execute(self, dataset_id: str, progress_callback=None) -> dict:
         dataset_meta = self.datasets.get_dataset(dataset_id)
@@ -51,6 +53,7 @@ class IndexDatasetUseCase:
                 Document(
                     dataset=dataset_id,
                     doc_id=item["doc_id"],
+                    title=item.get("title"),
                     text=text,
                     metadata=item.get("metadata", {}),
                     embedding_vector=self.embedding_encoder.encode(text),
@@ -66,14 +69,27 @@ class IndexDatasetUseCase:
             total += self.documents.upsert_documents(batch)
             if progress_callback is not None:
                 progress_callback(total)
-        query_snapshot = [
-            {
-                "query_id": q["query_id"],
-                "query_text": q["query_text"],
-                "relevant_doc_ids": list(q.get("relevant_doc_ids") or []),
-            }
-            for q in self.datasets.iter_queries(dataset_id)
-        ]
+        query_snapshot = []
+        qrels_count = 0
+        for q in self.datasets.iter_queries(dataset_id):
+            relevant_doc_ids = list(q.get("relevant_doc_ids") or [])
+            qrels = {str(doc_id): int(rel) for doc_id, rel in (q.get("qrels") or {}).items()}
+            query_snapshot.append(
+                {
+                    "query_id": q["query_id"],
+                    "query_text": q["query_text"],
+                    "relevant_doc_ids": relevant_doc_ids,
+                }
+            )
+            qrels_count += len(qrels)
+            if self.ground_truths is not None:
+                self.ground_truths.upsert_qrels(
+                    dataset=dataset_id,
+                    split=str(q.get("split") or "test"),
+                    query_id=str(q["query_id"]),
+                    query_text=str(q["query_text"]),
+                    qrels=qrels,
+                )
         if self.dataset_snapshots is not None:
             subset = dataset_meta.get("subset") or {}
             self.dataset_snapshots.upsert(
@@ -99,6 +115,7 @@ class IndexDatasetUseCase:
             "quantum_dim": self.quantum_encoder.dim,
             "snapshot_document_count": len(document_ids),
             "snapshot_query_count": len(query_snapshot),
+            "qrels_count": qrels_count,
         }
 
 
@@ -180,7 +197,6 @@ class SearchUseCase:
             "has_labels": False,
             "debug": {
                 "retrieved_count": len(results),
-                "mean_score": (sum(scores) / len(scores)) if scores else 0.0,
                 "max_score": max(scores) if scores else 0.0,
                 "min_score": min(scores) if scores else 0.0,
             },
@@ -193,14 +209,9 @@ class SearchUseCase:
         q_set = set(q_ids)
         intersection = sorted(c_set.intersection(q_set))
 
-        def _mean_score(items):
-            return (sum(float(x.score) for x in items[:top_k]) / max(len(items[:top_k]), 1)) if items else 0.0
-
         return {
             "top_k": top_k,
             "common_doc_ids": intersection,
-            "classical_mean_score": _mean_score(classical_results),
-            "quantum_mean_score": _mean_score(quantum_results),
         }
 
     def execute(self, dataset: str, query: str, mode: str = "compare", top_k: int = 5) -> dict:

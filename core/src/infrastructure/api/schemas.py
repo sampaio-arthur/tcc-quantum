@@ -65,12 +65,12 @@ class ChatDetailOut(ChatOut):
 
 
 class IndexRequest(BaseModel):
-    dataset_id: str = "reuters"
+    dataset_id: str = "beir/trec-covid"
     force_reindex: bool = False
 
 
 class SearchRequest(BaseModel):
-    dataset_id: str = "reuters"
+    dataset_id: str = "beir/trec-covid"
     query: str
     query_id: str | None = None
     mode: str = "compare"
@@ -79,14 +79,14 @@ class SearchRequest(BaseModel):
 
 
 class GroundTruthUpsertRequest(BaseModel):
-    dataset_id: str = "reuters"
+    dataset_id: str = "beir/trec-covid"
     query_id: str
     query_text: str
     relevant_doc_ids: list[str]
 
 
 class EvaluateRequest(BaseModel):
-    dataset_id: str = "reuters"
+    dataset_id: str = "beir/trec-covid"
     pipeline: str = "compare"
     k: int = 5
 

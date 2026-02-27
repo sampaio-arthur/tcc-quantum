@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.orm import Session
 
 from domain.entities import Chat, ChatMessage, DatasetSnapshot, Document, GroundTruth, MessageRole, SearchResult, User
@@ -19,8 +19,9 @@ from infrastructure.db.models import (
     ChatModel,
     DatasetSnapshotModel,
     DocumentModel,
-    GroundTruthModel,
     PasswordResetModel,
+    QrelModel,
+    QueryModel,
     UserModel,
 )
 class SqlAlchemyUserRepository(UserRepositoryPort):
@@ -170,8 +171,9 @@ class SqlAlchemyDocumentRepository(DocumentRepositoryPort):
         for item in documents:
             row = self.session.scalar(select(DocumentModel).where(DocumentModel.dataset == item.dataset, DocumentModel.doc_id == item.doc_id))
             if row is None:
-                row = DocumentModel(dataset=item.dataset, doc_id=item.doc_id, text=item.text)
+                row = DocumentModel(dataset=item.dataset, doc_id=item.doc_id, title=item.title, text=item.text)
                 self.session.add(row)
+            row.title = item.title
             row.text = item.text
             row.metadata_json = item.metadata
             row.embedding_vector = item.embedding_vector
@@ -215,31 +217,105 @@ class SqlAlchemyGroundTruthRepository(GroundTruthRepositoryPort):
         self.session = session
 
     def upsert(self, item: GroundTruth) -> GroundTruth:
-        row = self.session.scalar(select(GroundTruthModel).where(GroundTruthModel.dataset == item.dataset, GroundTruthModel.query_id == item.query_id))
-        if row is None:
-            row = GroundTruthModel(dataset=item.dataset, query_id=item.query_id)
-            self.session.add(row)
-        row.query_text = item.query_text
-        row.relevant_doc_ids = item.relevant_doc_ids
+        qrels = {doc_id: 1 for doc_id in item.relevant_doc_ids}
+        self.upsert_qrels(
+            dataset=item.dataset,
+            split="test",
+            query_id=item.query_id,
+            query_text=item.query_text,
+            qrels=qrels,
+        )
+        row = self.session.scalar(
+            select(QueryModel).where(QueryModel.dataset == item.dataset, QueryModel.split == "test", QueryModel.query_id == item.query_id)
+        )
         row.user_id = item.user_id
         self.session.commit()
         self.session.refresh(row)
-        return GroundTruth(row.query_id, row.query_text, list(row.relevant_doc_ids or []), row.dataset, row.user_id, row.created_at)
+        return GroundTruth(row.query_id, row.query_text, list(item.relevant_doc_ids), row.dataset, row.user_id, row.created_at)
+
+    def upsert_qrels(self, dataset: str, split: str, query_id: str, query_text: str, qrels: dict[str, int]) -> None:
+        row = self.session.scalar(
+            select(QueryModel).where(
+                QueryModel.dataset == dataset,
+                QueryModel.split == split,
+                QueryModel.query_id == query_id,
+            )
+        )
+        if row is None:
+            row = QueryModel(dataset=dataset, split=split, query_id=query_id)
+            self.session.add(row)
+        row.query_text = query_text
+        self.session.execute(
+            delete(QrelModel).where(
+                QrelModel.dataset == dataset,
+                QrelModel.split == split,
+                QrelModel.query_id == query_id,
+            )
+        )
+        for doc_id, relevance in qrels.items():
+            self.session.add(
+                QrelModel(
+                    dataset=dataset,
+                    split=split,
+                    query_id=query_id,
+                    doc_id=doc_id,
+                    relevance=int(relevance),
+                )
+            )
+        self.session.commit()
 
     def get(self, dataset: str, query_id: str) -> GroundTruth | None:
-        row = self.session.scalar(select(GroundTruthModel).where(GroundTruthModel.dataset == dataset, GroundTruthModel.query_id == query_id))
+        row = self.session.scalar(
+            select(QueryModel).where(
+                QueryModel.dataset == dataset,
+                QueryModel.split == "test",
+                QueryModel.query_id == query_id,
+            )
+        )
         if not row:
             return None
-        return GroundTruth(row.query_id, row.query_text, list(row.relevant_doc_ids or []), row.dataset, row.user_id, row.created_at)
+        qrels = self.session.scalars(
+            select(QrelModel)
+            .where(QrelModel.dataset == dataset, QrelModel.split == "test", QrelModel.query_id == query_id)
+            .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
+        ).all()
+        relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
+        return GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at)
 
     def list_by_dataset(self, dataset: str) -> list[GroundTruth]:
-        rows = self.session.scalars(select(GroundTruthModel).where(GroundTruthModel.dataset == dataset).order_by(GroundTruthModel.id.asc())).all()
-        return [GroundTruth(r.query_id, r.query_text, list(r.relevant_doc_ids or []), r.dataset, r.user_id, r.created_at) for r in rows]
+        rows = self.session.scalars(
+            select(QueryModel)
+            .where(QueryModel.dataset == dataset, QueryModel.split == "test")
+            .order_by(QueryModel.id.asc())
+        ).all()
+        items: list[GroundTruth] = []
+        for row in rows:
+            qrels = self.session.scalars(
+                select(QrelModel)
+                .where(QrelModel.dataset == dataset, QrelModel.split == "test", QrelModel.query_id == row.query_id)
+                .order_by(QrelModel.relevance.desc(), QrelModel.doc_id.asc())
+            ).all()
+            relevant_doc_ids = [q.doc_id for q in qrels if int(q.relevance) > 0]
+            items.append(GroundTruth(row.query_id, row.query_text, relevant_doc_ids, row.dataset, row.user_id, row.created_at))
+        return items
 
     def delete(self, dataset: str, query_id: str) -> bool:
-        row = self.session.scalar(select(GroundTruthModel).where(GroundTruthModel.dataset == dataset, GroundTruthModel.query_id == query_id))
+        row = self.session.scalar(
+            select(QueryModel).where(
+                QueryModel.dataset == dataset,
+                QueryModel.split == "test",
+                QueryModel.query_id == query_id,
+            )
+        )
         if row is None:
             return False
+        self.session.execute(
+            delete(QrelModel).where(
+                QrelModel.dataset == dataset,
+                QrelModel.split == "test",
+                QrelModel.query_id == query_id,
+            )
+        )
         self.session.delete(row)
         self.session.commit()
         return True

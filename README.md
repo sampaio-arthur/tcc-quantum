@@ -1,6 +1,6 @@
 # TCC - Quantum Comparative Retrieval (Classical vs Quantum-Inspired)
 
-Aplicacao full-stack para comparar busca semantica em dois tipos de vetorizacao sobre o dataset Reuters:
+Aplicacao full-stack para comparar busca semantica em dois tipos de vetorizacao sobre datasets BEIR:
 
 - Busca semantica classica por embeddings (`sBERT`) em `documents.embedding_vector`
 - Busca semantica por vetorizacao quantica simulada / quantico-inspirada (`PennyLane`) em `documents.quantum_vector`
@@ -101,27 +101,42 @@ Servicos:
 4. Abra o chat e envie uma consulta
 5. O frontend vai:
    - criar conversa
-   - garantir indexacao do dataset Reuters
+   - garantir indexacao do dataset `beir/trec-covid`
    - executar busca comparativa classico x quantico-inspirado
    - exibir paineis com latencia e scores
 
 Observacoes:
 
-- A primeira indexacao pode demorar (download do corpus Reuters + modelo sBERT + indexacao completa)
+- A primeira indexacao pode demorar (modelo sBERT + indexacao completa do corpus BEIR local)
 - O job de indexacao compativel usa polling em `/search/dataset/index/status`
 
-## Reuters (dataset usado)
+## Dataset (BEIR)
 
-- Provider: `nltk.corpus.reuters`
-- O backend tenta `nltk.download("reuters")` automaticamente
-- Se o download falhar (sem internet/permissao), a indexacao e listagem do dataset vao falhar
-- O backend persiste snapshot do dataset em `dataset_snapshots` durante a indexacao (doc_ids + queries + metadados) para rastreabilidade
+Este projeto utiliza datasets do benchmark BEIR para avaliacao de busca semantica.
 
-Referencias:
+Os datasets NAO sao versionados no repositorio devido ao tamanho.
 
-- `https://www.nltk.org/howto/corpus.html`
-- `https://www.nltk.org/book/ch02.html`
-- `http://kdd.ics.uci.edu/databases/reuters21578/reuters21578.html`
+Exemplo usado:
+
+- TREC-COVID (BEIR)
+
+Fonte oficial:
+
+- `https://github.com/beir-cellar/beir`
+- `https://huggingface.co/collections/BeIR/beir-datasets-64e5c66c4a7c11a7c1f59f3e`
+
+Estrutura esperada no projeto:
+
+```text
+core/data/beir/trec-covid/
+├─ corpus.jsonl
+├─ queries.jsonl
+└─ qrels/test.tsv
+```
+
+O backend le os arquivos localmente (offline), sem download automatico.
+
+Apos colocar os arquivos no local correto, o backend pode ser iniciado normalmente.
 
 ## Documentacao adicional
 

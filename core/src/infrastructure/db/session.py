@@ -34,6 +34,39 @@ def init_db(settings: Settings | None = None) -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE IF EXISTS documents ADD COLUMN IF NOT EXISTS title TEXT"))
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS queries (
+                    id SERIAL PRIMARY KEY,
+                    dataset VARCHAR(100) NOT NULL,
+                    split VARCHAR(32) NOT NULL DEFAULT 'test',
+                    query_id VARCHAR(255) NOT NULL,
+                    query_text TEXT NOT NULL,
+                    user_id INTEGER NULL REFERENCES users(id) ON DELETE SET NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    CONSTRAINT uq_queries_dataset_split_query_id UNIQUE (dataset, split, query_id)
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS qrels (
+                    id SERIAL PRIMARY KEY,
+                    dataset VARCHAR(100) NOT NULL,
+                    split VARCHAR(32) NOT NULL DEFAULT 'test',
+                    query_id VARCHAR(255) NOT NULL,
+                    doc_id VARCHAR(255) NOT NULL,
+                    relevance INTEGER NOT NULL DEFAULT 0,
+                    CONSTRAINT uq_qrels_dataset_split_query_doc UNIQUE (dataset, split, query_id, doc_id)
+                )
+                """
+            )
+        )
 
 
 def db_session() -> Generator[Session, None, None]:

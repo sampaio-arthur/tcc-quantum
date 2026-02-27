@@ -35,14 +35,13 @@ O sistema tambem inclui:
 
 ## Fluxo ponta a ponta
 
-### 1) Dataset (Reuters)
+### 1) Dataset (BEIR local/offline)
 
-- Provider implementado: `core/src/infrastructure/datasets/reuters_provider.py`
-- Fonte: `nltk.corpus.reuters` (Reuters-21578)
-- O provider tenta `nltk.download("reuters")` automaticamente se o corpus nao estiver instalado
-- Sem mini-dataset local interno: se o corpus continuar indisponivel, a API falha com erro de validacao
-- Aliases aceitos: `reuters`, `reuters-21578`, `reuters21578`, `nltk-reuters`, etc.
-- Configuracao atual do provider no codigo: snapshot completo (`max_docs=None`, `max_queries=None`)
+- Provider implementado: `core/src/infrastructure/datasets/beir_local_provider.py`
+- Fonte: arquivos locais no formato BEIR (`corpus.jsonl`, `queries.jsonl`, `qrels/test.tsv`)
+- Sem download automatico
+- Estrutura esperada: `core/data/beir/<dataset_name>/...`
+- Dataset padrao: `beir/trec-covid`
 
 ### 2) Indexacao
 
@@ -51,11 +50,12 @@ Caso de uso: `IndexDatasetUseCase`
 Passos reais:
 
 1. Busca metadados do dataset no provider
-2. Itera documentos do Reuters
+2. Itera documentos do corpus BEIR local
 3. Gera `embedding_vector` com `SbertEncoder.encode(text)`
 4. Gera `quantum_vector` com `PennyLaneQuantumEncoder.encode(text)`
 5. Faz upsert em `documents` em lotes de 64
-6. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
+6. Persiste `queries` e `qrels` (split `test`) no banco
+7. Persiste snapshot em `dataset_snapshots` (doc_ids, queries, metadados)
 
 Observacoes:
 
@@ -91,7 +91,7 @@ Modo `compare` retorna tambem:
 
 - `comparison.classical`
 - `comparison.quantum`
-- `comparison_metrics` com `common_doc_ids` e medias de score
+- `comparison_metrics` com sobreposicao de `common_doc_ids` no top-k
 
 ### 4) Chat persistido
 
@@ -99,7 +99,7 @@ Fluxo usado pelo frontend (`frontend/src/pages/Chat.tsx`):
 
 1. Cria conversa (se ainda nao houver uma ativa)
 2. Salva mensagem do usuario
-3. Garante indexacao do dataset Reuters (com polling)
+3. Garante indexacao do dataset `beir/trec-covid` (com polling)
 4. Executa busca comparativa
 5. Salva mensagem `assistant` textual resumindo resultados
 6. Armazena ultima resposta completa em `localStorage` para renderizar os paineis
@@ -112,15 +112,12 @@ Tambem existe persistencia estruturada pelo backend:
 
 ### Ground truth
 
-Tabela: `ground_truth`
+Tabelas usadas:
 
-Campos usados:
+- `queries` (`dataset`, `split`, `query_id`, `query_text`)
+- `qrels` (`dataset`, `split`, `query_id`, `doc_id`, `relevance`)
 
-- `dataset`
-- `query_id`
-- `query_text`
-- `relevant_doc_ids`
-- `user_id` (opcional)
+Para compatibilidade com o fluxo atual de avaliacao, o repositorio monta `relevant_doc_ids` a partir de `qrels` com `relevance > 0`.
 
 ### Cadastro de gabaritos
 
@@ -139,7 +136,7 @@ Caso de uso: `EvaluateUseCase`
 
 Fluxo:
 
-1. Le `ground_truth` do dataset
+1. Le gabaritos do dataset a partir de `queries` + `qrels`
 2. Executa busca por `query_text` no(s) pipeline(s)
 3. Calcula metricas por query
 4. Agrega medias por pipeline
@@ -253,7 +250,8 @@ Tabelas principais:
 - `chats`
 - `chat_messages`
 - `documents`
-- `ground_truth`
+- `queries`
+- `qrels`
 - `dataset_snapshots`
 
 Detalhes em `DB_SCHEMA.md`.
@@ -262,7 +260,7 @@ Detalhes em `DB_SCHEMA.md`.
 
 - `ideal_answer` nao participa da avaliacao no backend atual
 - `answer_similarity`, `mrr`, `f1_at_k`, `accuracy_at_k` ainda retornam `null`
-- Custo de indexacao pode ser alto no Reuters completo (sBERT local + corpus inteiro)
+- Custo de indexacao pode ser alto em datasets BEIR grandes (sBERT local + corpus inteiro)
 - Pipeline quantico e quantico-inspirado em simulacao (PennyLane), nao hardware quantico real
 
 ## Referencias de implementacao

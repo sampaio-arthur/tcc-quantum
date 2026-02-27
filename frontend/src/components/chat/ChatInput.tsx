@@ -51,10 +51,6 @@ export function ChatInput({ onSendMessage, isLoading }: ChatInputProps) {
           <ArrowUp className="h-5 w-5" />
         </Button>
       </div>
-
-      <p className="text-xs text-muted-foreground text-center mt-2">
-        A comparacao prioriza acuracia; latencia e metrica auxiliar.
-      </p>
     </div>
   );
 }

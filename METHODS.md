@@ -45,7 +45,7 @@
 Observacao:
 
 - metricas de IR canonicas sao calculadas no fluxo de avaliacao batch com `ground_truth`
-- no chat, a comparacao usa proxies (latencia e mean score@k)
+- no chat, a comparacao usa principalmente latencia e inspecao dos rankings recuperados
 
 ## Reprodutibilidade
 
@@ -143,12 +143,6 @@ Sejam:
 ### 5.1 `common_doc_ids`
 
 - `common_doc_ids = intersecao(Ck, Qk)` (lista ordenada dos ids em comum no top-k)
-
-### 5.2 Media de score@k
-
-Para uma lista `Rk`:
-
-- `mean_score@k = sum(score_i) / max(len(Rk), 1)`
 
 ## 6. Metricas de avaliacao batch (IR)
 

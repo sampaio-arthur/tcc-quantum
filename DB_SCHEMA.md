@@ -43,6 +43,7 @@
 - `id`
 - `dataset`
 - `doc_id`
+- `title` (opcional)
 - `text`
 - `metadata` (JSON/JSONB)
 - `embedding_vector`
@@ -52,19 +53,32 @@ Constraint:
 
 - `UNIQUE(dataset, doc_id)`
 
-### `ground_truth`
+### `queries`
 
 - `id`
 - `dataset`
+- `split`
 - `query_id`
 - `query_text`
-- `relevant_doc_ids` (JSON/JSONB)
 - `user_id` (opcional)
 - `created_at`
 
 Constraint:
 
-- `UNIQUE(dataset, query_id)`
+- `UNIQUE(dataset, split, query_id)`
+
+### `qrels`
+
+- `id`
+- `dataset`
+- `split`
+- `query_id`
+- `doc_id`
+- `relevance` (int)
+
+Constraint:
+
+- `UNIQUE(dataset, split, query_id, doc_id)`
 
 ### `dataset_snapshots`
 

@@ -11,7 +11,7 @@ import { PipelinePanel } from '@/components/chat/PipelinePanel';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, Conversation, Message, SearchResponse } from '@/lib/api';
 
-const DEFAULT_DATASET_ID = 'reuters';
+const DEFAULT_DATASET_ID = 'beir/trec-covid';
 
 export default function Chat() {
   const { user, isLoading: authLoading } = useAuth();
@@ -99,46 +99,6 @@ export default function Chat() {
     }
   };
 
-  const buildAssistantContent = (searchResponse: SearchResponse) => {
-    const comparison = searchResponse.comparison;
-    const classicalResults = comparison?.classical.results ?? searchResponse.results ?? [];
-    const quantumResults = comparison?.quantum.results ?? [];
-    const comparative = searchResponse.comparison_metrics;
-    const classicalLatency = comparison?.classical.metrics?.latency_ms;
-    const quantumLatency = comparison?.quantum.metrics?.latency_ms;
-
-    if (!classicalResults.length && !quantumResults.length) {
-      return 'Consulta executada, mas nenhum documento foi recuperado.';
-    }
-
-    const lines: string[] = [
-      `Busca semantica no dataset Reuters (${searchResponse.mode}).`,
-    ];
-
-    if (classicalResults.length) {
-      lines.push(
-        'Classico: ' +
-          classicalResults.length +
-          ' docs recuperados | melhor score=' +
-          classicalResults[0].score.toFixed(3)
-      );
-    }
-
-    if (quantumResults.length) {
-      lines.push(
-        'Quantico: ' +
-          quantumResults.length +
-          ' docs recuperados | melhor score=' +
-          quantumResults[0].score.toFixed(3)
-      );
-    }
-
-    if (classicalLatency !== undefined && quantumLatency !== undefined) {
-      lines.push(`Latencia (ms): classico=${classicalLatency.toFixed(1)} | quantico=${quantumLatency.toFixed(1)}`);
-    }
-
-    return lines.join('\n');
-  };
   const handleSendMessage = async (payload: { message: string }) => {
     const userText = payload.message.trim();
     if (!userText) return;
@@ -166,11 +126,6 @@ export default function Chat() {
       if (conversationId) {
         saveCachedResponse(conversationId, searchResponse);
       }
-
-      const assistantContent = buildAssistantContent(searchResponse);
-
-      const assistantMessage = await api.addMessage(conversationId, 'assistant', assistantContent);
-      setMessages((prev) => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
       const detail = error instanceof Error ? error.message : 'Erro desconhecido';
@@ -179,7 +134,7 @@ export default function Chat() {
         {
           id: Date.now(),
           role: 'assistant',
-          content: `Nao foi possivel consultar o dataset. ${detail}`,
+          content: `Não foi possível consultar o dataset. ${detail}`,
           created_at: new Date().toISOString(),
         },
       ]);

@@ -23,7 +23,6 @@ Este arquivo descreve as dependencias declaradas no projeto e o uso real no codi
 | `scipy` | `core/src/infrastructure/metrics/sklearn_metrics.py` | `scipy.stats.spearmanr` |
 | `scikit-learn` | `core/src/infrastructure/metrics/sklearn_metrics.py` | `precision_score`, `recall_score`, `ndcg_score` |
 | `pgvector` | `core/src/infrastructure/db/vector_type.py` | Tipo vetorial no PostgreSQL (`pgvector.sqlalchemy.Vector`) |
-| `nltk` | `core/src/infrastructure/datasets/reuters_provider.py` | Provider do dataset Reuters e download do corpus |
 | `sentence-transformers` | `core/src/infrastructure/encoders/classical.py` | Encoder classico (`SbertEncoder`) |
 | `pennylane` | `core/src/infrastructure/encoders/quantum.py` | Encoder quantico-inspirado (`qml.qnode`, `AngleEmbedding`, `qml.probs`) |
 | `autoray` | dependencia de compatibilidade do ecossistema PennyLane (pinada em `requirements.txt`) | Mantida para evitar quebra de versao com `pennylane==0.39.0` |

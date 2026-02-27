@@ -46,12 +46,12 @@ def test_minimal_required_flow():
     assert chat.status_code == 201, chat.text
     chat_id = chat.json()["id"]
 
-    index_resp = client.post("/api/index", json={"dataset_id": "reuters"}, headers=headers)
+    index_resp = client.post("/api/index", json={"dataset_id": "beir/trec-covid"}, headers=headers)
     assert index_resp.status_code == 200, index_resp.text
 
     search_resp = client.post(
         "/api/search",
-        json={"dataset_id": "reuters", "query": "trade tariffs imports exports", "mode": "compare", "chat_id": chat_id},
+        json={"dataset_id": "beir/trec-covid", "query": "trade tariffs imports exports", "mode": "compare", "chat_id": chat_id},
         headers=headers,
     )
     assert search_resp.status_code == 200, search_resp.text
@@ -68,7 +68,7 @@ def test_minimal_required_flow():
     gt_resp = client.post(
         "/api/ground-truth",
         json={
-            "dataset_id": "reuters",
+            "dataset_id": "beir/trec-covid",
             "query_id": "q-trade",
             "query_text": "trade tariffs imports exports",
             "relevant_doc_ids": [first_doc_id],
@@ -77,7 +77,7 @@ def test_minimal_required_flow():
     )
     assert gt_resp.status_code == 200, gt_resp.text
 
-    eval_resp = client.post("/api/evaluate", json={"dataset_id": "reuters", "pipeline": "compare", "k": 5}, headers=headers)
+    eval_resp = client.post("/api/evaluate", json={"dataset_id": "beir/trec-covid", "pipeline": "compare", "k": 5}, headers=headers)
     assert eval_resp.status_code == 200, eval_resp.text
     eval_payload = eval_resp.json()
     assert len(eval_payload["pipelines"]) == 2

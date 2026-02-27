@@ -43,6 +43,7 @@ class PasswordResetToken:
 class Document:
     dataset: str
     doc_id: str
+    title: str | None
     text: str
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding_vector: list[float] | None = None

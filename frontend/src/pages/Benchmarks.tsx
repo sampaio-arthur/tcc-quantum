@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, BenchmarkLabel } from '@/lib/api';
 
-const DEFAULT_DATASET_ID = 'reuters';
+const DEFAULT_DATASET_ID = 'beir/trec-covid';
 
 export default function Benchmarks() {
   const { user, isLoading: authLoading } = useAuth();
