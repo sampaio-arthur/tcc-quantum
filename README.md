@@ -123,7 +123,6 @@ Exemplo usado:
 Fonte oficial:
 
 - `https://github.com/beir-cellar/beir`
-- `https://huggingface.co/collections/BeIR/beir-datasets-64e5c66c4a7c11a7c1f59f3e`
 
 Estrutura esperada no projeto:
 
