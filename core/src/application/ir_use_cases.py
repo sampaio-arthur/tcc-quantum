@@ -233,26 +233,28 @@ class SearchUseCase:
                 "metrics": self._search_metrics(results, latency_ms, top_k),
                 "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
             }
-        classical, classical_latency = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
-        quantum, quantum_latency = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
-        return {
-            "query": query,
-            "mode": Pipeline.COMPARE.value,
-            "results": classical,
-            "comparison": {
-                "classical": {
-                    "results": classical,
-                    "metrics": self._search_metrics(classical, classical_latency, top_k),
-                    "algorithm_details": self._algorithm_details(Pipeline.CLASSICAL),
+        if mode == Pipeline.COMPARE.value:
+            classical, classical_latency = self._search_single(dataset, query, Pipeline.CLASSICAL, top_k)
+            quantum, quantum_latency = self._search_single(dataset, query, Pipeline.QUANTUM, top_k)
+            return {
+                "query": query,
+                "mode": Pipeline.COMPARE.value,
+                "results": classical,
+                "comparison": {
+                    "classical": {
+                        "results": classical,
+                        "metrics": self._search_metrics(classical, classical_latency, top_k),
+                        "algorithm_details": self._algorithm_details(Pipeline.CLASSICAL),
+                    },
+                    "quantum": {
+                        "results": quantum,
+                        "metrics": self._search_metrics(quantum, quantum_latency, top_k),
+                        "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
+                    },
                 },
-                "quantum": {
-                    "results": quantum,
-                    "metrics": self._search_metrics(quantum, quantum_latency, top_k),
-                    "algorithm_details": self._algorithm_details(Pipeline.QUANTUM),
-                },
-            },
-            "comparison_metrics": self._compare_rankings(classical, quantum, top_k),
-        }
+                "comparison_metrics": self._compare_rankings(classical, quantum, top_k),
+            }
+        raise ValidationError("Invalid mode. Use 'classical', 'quantum', or 'compare'.")
 
 
 class UpsertGroundTruthUseCase:

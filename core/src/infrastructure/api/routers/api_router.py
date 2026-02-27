@@ -528,6 +528,8 @@ def upsert_benchmark_label(payload: BenchmarkLabelInput, user_id: int = Depends(
     if not relevant:
         candidate = services.search.execute(payload.dataset_id, payload.query_text, "classical", 5)
         relevant = [r.doc_id for r in candidate["results"]]
+    if not relevant:
+        raise HTTPException(status_code=400, detail="Nao achou relevancia na pergunta.")
     item = services.upsert_ground_truth.execute(
         dataset=payload.dataset_id,
         query_id=payload.query_text.lower().replace(" ", "-")[:64],

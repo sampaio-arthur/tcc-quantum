@@ -106,14 +106,17 @@ class BeirLocalDatasetProvider:
         if not self.data_root.exists():
             return []
         entries: list[dict] = []
+        errors: list[str] = []
         for candidate in sorted(self.data_root.iterdir()):
             if not candidate.is_dir():
                 continue
             dataset_id = f"beir/{candidate.name}"
             try:
                 entries.append(self.get_dataset(dataset_id))
-            except ValidationError:
-                continue
+            except ValidationError as exc:
+                errors.append(f"{dataset_id}: {exc}")
+        if errors:
+            raise ValidationError("Invalid dataset configuration(s): " + " | ".join(errors))
         return entries
 
     def get_dataset(self, dataset_id: str) -> dict | None:
