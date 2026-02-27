@@ -4,6 +4,40 @@ interface ComparisonPanelProps {
   response: SearchResponse | null;
 }
 
+function metricNumber(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function metricPercent(value: number | null, maxValue: number | null): number {
+  if (value === null || maxValue === null || maxValue <= 0) return 0;
+  return Math.max(0, Math.min(100, (value / maxValue) * 100));
+}
+
+function MetricCell({
+  value,
+  maxValue,
+}: {
+  value: number | null;
+  maxValue: number | null;
+}) {
+  if (value === null) return <span>-</span>;
+
+  const percent = metricPercent(value, maxValue);
+
+  return (
+    <div className='min-w-[120px]'>
+      <div className='text-foreground'>{value.toFixed(3)}</div>
+      <div className='mt-1 h-1.5 w-full rounded-full bg-muted'>
+        <div
+          className='h-1.5 rounded-full bg-emerald-500'
+          style={{ width: `${percent.toFixed(1)}%` }}
+        />
+      </div>
+      <div className='mt-1 text-[10px] text-muted-foreground'>{percent.toFixed(0)}%</div>
+    </div>
+  );
+}
+
 function StepByStep({ title, details }: { title: string; details?: SearchAlgorithmDetails }) {
   const rawSteps = details?.debug?.steps;
   const steps = Array.isArray(rawSteps) ? rawSteps.filter((x): x is string => typeof x === 'string') : [];
@@ -39,6 +73,7 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
   const irObservation = hasIrLabels
     ? 'Calculado com gabarito (qrels).'
     : 'Requer gabarito (qrels) para calcular.';
+  const metricMax = 1;
 
   return (
     <div className='w-full max-w-3xl mx-auto px-4 pb-6'>
@@ -88,26 +123,66 @@ export function ComparisonPanel({ response }: ComparisonPanelProps) {
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Precision@k</td>
-                    <td className='py-2 pr-3'>{typeof classicalMetrics?.precision_at_k === 'number' ? classicalMetrics.precision_at_k.toFixed(3) : '-'}</td>
-                    <td className='py-2 pr-3'>{typeof quantumMetrics?.precision_at_k === 'number' ? quantumMetrics.precision_at_k.toFixed(3) : '-'}</td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(classicalMetrics?.precision_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(quantumMetrics?.precision_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Recall@k</td>
-                    <td className='py-2 pr-3'>{typeof classicalMetrics?.recall_at_k === 'number' ? classicalMetrics.recall_at_k.toFixed(3) : '-'}</td>
-                    <td className='py-2 pr-3'>{typeof quantumMetrics?.recall_at_k === 'number' ? quantumMetrics.recall_at_k.toFixed(3) : '-'}</td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(classicalMetrics?.recall_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(quantumMetrics?.recall_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>NDCG@k</td>
-                    <td className='py-2 pr-3'>{typeof classicalMetrics?.ndcg_at_k === 'number' ? classicalMetrics.ndcg_at_k.toFixed(3) : '-'}</td>
-                    <td className='py-2 pr-3'>{typeof quantumMetrics?.ndcg_at_k === 'number' ? quantumMetrics.ndcg_at_k.toFixed(3) : '-'}</td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(classicalMetrics?.ndcg_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(quantumMetrics?.ndcg_at_k)}
+                        maxValue={metricMax}
+                      />
+                    </td>
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                   <tr className='border-b border-border/60'>
                     <td className='py-2 pr-3 text-foreground'>Spearman</td>
-                    <td className='py-2 pr-3'>{typeof classicalMetrics?.spearman === 'number' ? classicalMetrics.spearman.toFixed(3) : '-'}</td>
-                    <td className='py-2 pr-3'>{typeof quantumMetrics?.spearman === 'number' ? quantumMetrics.spearman.toFixed(3) : '-'}</td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(classicalMetrics?.spearman)}
+                        maxValue={metricMax}
+                      />
+                    </td>
+                    <td className='py-2 pr-3'>
+                      <MetricCell
+                        value={metricNumber(quantumMetrics?.spearman)}
+                        maxValue={metricMax}
+                      />
+                    </td>
                     <td className='py-2'>{irObservation}</td>
                   </tr>
                 </tbody>
